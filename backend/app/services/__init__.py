@@ -6,6 +6,8 @@ from app.services.dataset_service import dataset_service, DatasetService
 from app.services.anomaly_injector import anomaly_injector, AnomalyInjectorService
 from app.services.data_generator import data_generator, DataGeneratorService
 from app.services.reconciliation_engine import reconciliation_engine, ReconciliationEngine
+from app.services.exception_detector import exception_detector, ExceptionDetectionService
+from app.services.exception_evaluator import exception_evaluator, ExceptionEvaluatorService
 
 __all__ = [
     "BaseAIService",
@@ -25,4 +27,8 @@ __all__ = [
     "DataGeneratorService",
     "reconciliation_engine",
     "ReconciliationEngine",
+    "exception_detector",
+    "ExceptionDetectionService",
+    "exception_evaluator",
+    "ExceptionEvaluatorService",
 ]

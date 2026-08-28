@@ -47,6 +47,13 @@ export default function LandingPage() {
             </Link>
 
             <Link
+              href="/evaluation"
+              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors border border-emerald-900/50 px-3 py-1.5 rounded-lg bg-emerald-950/40"
+            >
+              Evaluation
+            </Link>
+
+            <Link
               href="/generator"
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors border border-blue-900/50 px-3 py-1.5 rounded-lg bg-blue-950/40"
             >

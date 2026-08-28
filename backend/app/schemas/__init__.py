@@ -18,11 +18,16 @@ from app.schemas.generator import (
     GeneratorResponse,
     DatasetMetadata,
 )
-from app.schemas.reconciliation import (
-    ReconcileRequest,
-    ReconcileResponse,
-    ExceptionDetailResponse,
-    ExceptionFilterParams,
+from app.schemas.exceptions import (
+    DetectedException,
+    ExceptionSummary,
+    DetectionResponse,
+    ExceptionEvidence,
+)
+from app.schemas.evaluation import (
+    MetricItem,
+    OverallMetrics,
+    EvaluationResponse,
 )
 
 __all__ = [
@@ -46,4 +51,11 @@ __all__ = [
     "ReconcileResponse",
     "ExceptionDetailResponse",
     "ExceptionFilterParams",
+    "DetectedException",
+    "ExceptionSummary",
+    "DetectionResponse",
+    "ExceptionEvidence",
+    "MetricItem",
+    "OverallMetrics",
+    "EvaluationResponse",
 ]

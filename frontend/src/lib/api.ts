@@ -217,6 +217,47 @@ export async function fetchExceptionDetail(datasetId: string, exceptionId: strin
   return await res.json();
 }
 
+export interface MetricItem {
+  tp: number;
+  fp: number;
+  fn: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}
+
+export interface EvaluationResponse {
+  success: boolean;
+  dataset_id: string;
+  total_ground_truth: number;
+  total_detected: number;
+  overall: {
+    total_tp: number;
+    total_fp: number;
+    total_fn: number;
+    precision: number;
+    recall: number;
+    f1: number;
+    macro_precision: number;
+    macro_recall: number;
+    macro_f1: number;
+  };
+  by_type: Record<string, MetricItem>;
+  evaluation_time_ms: number;
+}
+
+export async function runEvaluation(datasetId: string): Promise<EvaluationResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/evaluation/run/${encodeURIComponent(datasetId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Evaluation failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
 export function getDownloadUrl(datasetId: string, fileType: string): string {
   return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }
