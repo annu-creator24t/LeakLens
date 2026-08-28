@@ -79,6 +79,18 @@ class NumberedCanvas(canvas.Canvas):
         self.restoreState()
 
 
+def sanitize_csv_value(val: Any) -> Any:
+    """Escapes leading formula injection characters (=, +, -, @) on text fields for spreadsheet safety."""
+    if isinstance(val, str) and val:
+        if val[0] in ("=", "@", "+", "-"):
+            try:
+                float(val)
+                return val  # Legitimate number
+            except ValueError:
+                return f"'{val}"
+    return val
+
+
 class ReportGeneratorService:
     def __init__(self):
         self._report_history: Dict[str, List[ReportMetadata]] = {}  # dataset_id -> list
@@ -499,13 +511,16 @@ class ReportGeneratorService:
     ) -> str:
         """Generates sanitized, deterministic UTF-8 CSV exports with stable column ordering."""
         output = io.StringIO()
-        writer = csv.writer(output)
+        raw_writer = csv.writer(output)
+
+        def write_row(row: List[Any]):
+            raw_writer.writerow([sanitize_csv_value(c) for c in row])
 
         if table_type == "payments":
             records = await dataset_service.get_records(dataset_id, "payments")
-            writer.writerow(["payment_id", "order_id", "merchant_id", "amount", "currency", "payment_status", "payment_method", "created_at"])
+            write_row(["payment_id", "order_id", "merchant_id", "amount", "currency", "payment_status", "payment_method", "created_at"])
             for r in records:
-                writer.writerow([
+                write_row([
                     r.get("payment_id", ""),
                     r.get("order_id", ""),
                     r.get("merchant_id", ""),
@@ -518,9 +533,9 @@ class ReportGeneratorService:
 
         elif table_type == "settlements":
             records = await dataset_service.get_records(dataset_id, "settlements")
-            writer.writerow(["settlement_id", "payment_id", "settlement_amount", "settlement_status", "settlement_date"])
+            write_row(["settlement_id", "payment_id", "settlement_amount", "settlement_status", "settlement_date"])
             for r in records:
-                writer.writerow([
+                write_row([
                     r.get("settlement_id", ""),
                     r.get("payment_id", ""),
                     f"{float(r.get('settlement_amount', 0.0)):.2f}",
@@ -530,9 +545,9 @@ class ReportGeneratorService:
 
         elif table_type == "refunds":
             records = await dataset_service.get_records(dataset_id, "refunds")
-            writer.writerow(["refund_id", "payment_id", "refund_amount", "refund_status", "refund_date"])
+            write_row(["refund_id", "payment_id", "refund_amount", "refund_status", "refund_date"])
             for r in records:
-                writer.writerow([
+                write_row([
                     r.get("refund_id", ""),
                     r.get("payment_id", ""),
                     f"{float(r.get('refund_amount', 0.0)):.2f}",
@@ -542,9 +557,9 @@ class ReportGeneratorService:
 
         elif table_type == "fees":
             records = await dataset_service.get_records(dataset_id, "fees")
-            writer.writerow(["payment_id", "fee_amount", "tax_amount"])
+            write_row(["payment_id", "fee_amount", "tax_amount"])
             for r in records:
-                writer.writerow([
+                write_row([
                     r.get("payment_id", ""),
                     f"{float(r.get('fee_amount', 0.0)):.2f}",
                     f"{float(r.get('tax_amount', 0.0)):.2f}"
@@ -554,22 +569,22 @@ class ReportGeneratorService:
             recon = await reconciliation_engine.get_summary(dataset_id)
             if not recon:
                 recon = (await reconciliation_engine.reconcile(dataset_id)).model_dump()
-            writer.writerow(["metric", "value"])
-            writer.writerow(["dataset_id", dataset_id])
-            writer.writerow(["total_transactions", recon.get("total_transactions", 0)])
-            writer.writerow(["matched_count", recon.get("matched_count", 0)])
-            writer.writerow(["exception_count", recon.get("exception_count", 0)])
-            writer.writerow(["total_volume", f"{recon.get('total_volume', 0.0):.2f}"])
-            writer.writerow(["expected_settlement", f"{recon.get('expected_settlement', 0.0):.2f}"])
-            writer.writerow(["actual_settlement", f"{recon.get('actual_settlement', 0.0):.2f}"])
-            writer.writerow(["unexplained_difference", f"{recon.get('unexplained_difference', 0.0):.2f}"])
-            writer.writerow(["reconciliation_rate", f"{recon.get('reconciliation_rate', 0.0):.2f}"])
+            write_row(["metric", "value"])
+            write_row(["dataset_id", dataset_id])
+            write_row(["total_transactions", recon.get("total_transactions", 0)])
+            write_row(["matched_count", recon.get("matched_count", 0)])
+            write_row(["exception_count", recon.get("exception_count", 0)])
+            write_row(["total_volume", f"{recon.get('total_volume', 0.0):.2f}"])
+            write_row(["expected_settlement", f"{recon.get('expected_settlement', 0.0):.2f}"])
+            write_row(["actual_settlement", f"{recon.get('actual_settlement', 0.0):.2f}"])
+            write_row(["unexplained_difference", f"{recon.get('unexplained_difference', 0.0):.2f}"])
+            write_row(["reconciliation_rate", f"{recon.get('reconciliation_rate', 0.0):.2f}"])
 
         elif table_type == "exceptions":
             exceptions, _ = await exception_detector.get_exceptions(dataset_id=dataset_id, limit=100000)
-            writer.writerow(["exception_id", "payment_id", "exception_type", "severity", "financial_impact", "status", "description", "detected_at"])
+            write_row(["exception_id", "payment_id", "exception_type", "severity", "financial_impact", "status", "description", "detected_at"])
             for e in exceptions:
-                writer.writerow([
+                write_row([
                     e.get("exception_id", ""),
                     e.get("payment_id", ""),
                     e.get("primary_exception_type", e.get("exception_type", "")),
@@ -585,9 +600,9 @@ class ReportGeneratorService:
             notes = []
             if db is not None:
                 notes = await db["investigation_notes"].find({"dataset_id": dataset_id}, {"_id": 0}).sort("created_at", -1).to_list(length=None)
-            writer.writerow(["note_id", "exception_id", "actor", "note", "created_at"])
+            write_row(["note_id", "exception_id", "actor", "note", "created_at"])
             for n in notes:
-                writer.writerow([
+                write_row([
                     n.get("note_id", ""),
                     n.get("exception_id", ""),
                     n.get("actor", ""),
@@ -600,9 +615,9 @@ class ReportGeneratorService:
             audits = []
             if db is not None:
                 audits = await db["investigation_audit_events"].find({"dataset_id": dataset_id}, {"_id": 0}).sort("created_at", 1).to_list(length=None)
-            writer.writerow(["audit_id", "exception_id", "action", "previous_status", "new_status", "note", "actor", "created_at"])
+            write_row(["audit_id", "exception_id", "action", "previous_status", "new_status", "note", "actor", "created_at"])
             for a in audits:
-                writer.writerow([
+                write_row([
                     a.get("audit_id", ""),
                     a.get("exception_id", ""),
                     a.get("action", ""),

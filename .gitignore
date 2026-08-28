@@ -51,3 +51,8 @@ Thumbs.db
 # Generated data / artifacts
 data/generated/*
 !data/generated/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+*.pdf
+scratch/
+
