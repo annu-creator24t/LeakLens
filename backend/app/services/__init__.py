@@ -5,6 +5,7 @@ from app.services.data_normalizer import data_normalizer, DataNormalizerService
 from app.services.dataset_service import dataset_service, DatasetService
 from app.services.anomaly_injector import anomaly_injector, AnomalyInjectorService
 from app.services.data_generator import data_generator, DataGeneratorService
+from app.services.reconciliation_engine import reconciliation_engine, ReconciliationEngine
 
 __all__ = [
     "BaseAIService",
@@ -22,4 +23,6 @@ __all__ = [
     "AnomalyInjectorService",
     "data_generator",
     "DataGeneratorService",
+    "reconciliation_engine",
+    "ReconciliationEngine",
 ]

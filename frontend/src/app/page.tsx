@@ -38,7 +38,14 @@ export default function LandingPage() {
             </span>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            <Link
+              href="/reconciliation"
+              className="text-xs text-slate-300 hover:text-white transition-colors border border-slate-800 px-3 py-1.5 rounded-lg bg-slate-900"
+            >
+              Reconciliation
+            </Link>
+
             <Link
               href="/generator"
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors border border-blue-900/50 px-3 py-1.5 rounded-lg bg-blue-950/40"
