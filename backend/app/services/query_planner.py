@@ -1,0 +1,212 @@
+import re
+from typing import Optional, Dict, Any, List
+from app.schemas.ask import AskIntent, QueryPlan
+
+
+class QueryPlannerService:
+    """
+    Parses natural language questions into safe, structured query plans.
+    Strictly validates parameters and guards against prompt injection and arbitrary database queries.
+    """
+
+    INJECTION_PATTERNS = [
+        r"ignore\s+(all\s+)?(previous|prior)\s+instructions",
+        r"(show|tell|print|reveal)\s+(me\s+)?(the\s+)?(database\s+)?(password|credential|secret|api[_\s]key|env)",
+        r"(drop|delete|truncate|insert|update)\s+(table|collection|database)",
+        r"system\s+prompt",
+        r"<script.*?>",
+        r"\{\{.*?\}\}",
+        r"eval\(",
+        r"exec\(",
+    ]
+
+    OFF_TOPIC_KEYWORDS = [
+        "python game",
+        "write a poem",
+        "weather",
+        "recipe",
+        "who are you",
+        "tell me a joke",
+        "capital of",
+        "translate",
+        "write code for",
+        "write a story",
+    ]
+
+    UNSUPPORTED_KEYWORDS = [
+        "next month",
+        "future sales",
+        "forecast",
+        "predict",
+        "fraud",
+        "will customer pay",
+        "who is the customer",
+        "customer phone",
+        "customer address",
+        "chargeback probability",
+    ]
+
+    def plan_query(self, question: str, previous_context: Optional[Dict[str, Any]] = None) -> QueryPlan:
+        q_lower = question.strip().lower()
+
+        # 1. Prompt Injection Defense Check
+        for pat in self.INJECTION_PATTERNS:
+            if re.search(pat, q_lower, re.IGNORECASE):
+                return QueryPlan(
+                    intent=AskIntent.OFF_TOPIC,
+                    confidence=1.0,
+                    extracted_terms=["SECURITY_GUARD_TRIGGERED"]
+                )
+
+        # 2. Off-Topic Check
+        for kw in self.OFF_TOPIC_KEYWORDS:
+            if kw in q_lower:
+                return QueryPlan(
+                    intent=AskIntent.OFF_TOPIC,
+                    confidence=1.0,
+                    extracted_terms=[kw]
+                )
+
+        # 3. Unsupported Future/Fraud/PII Prediction Check
+        for kw in self.UNSUPPORTED_KEYWORDS:
+            if kw in q_lower:
+                return QueryPlan(
+                    intent=AskIntent.UNSUPPORTED_QUESTION,
+                    confidence=1.0,
+                    extracted_terms=[kw]
+                )
+
+        # 4. Extract Explicit Identifiers (Payment ID / Order ID) - Must contain digits
+        pid_match = re.search(r"\b(pay[_-]?\d[\w\d\-]*)\b", question, re.IGNORECASE)
+        ord_match = re.search(r"\b(ord[_-]?\d[\w\d\-]*)\b", question, re.IGNORECASE)
+        
+        payment_id = pid_match.group(1).upper() if pid_match else None
+        order_id = ord_match.group(1).upper() if ord_match else None
+
+        if payment_id or order_id:
+            return QueryPlan(
+                intent=AskIntent.TRANSACTION_LOOKUP,
+                payment_id=payment_id,
+                order_id=order_id,
+                confidence=0.95,
+                extracted_terms=[payment_id or order_id or ""]
+            )
+
+        # Extract limit (e.g. "top 5", "top 10", "3 biggest")
+        limit = 5
+        limit_match = re.search(r"\b(top|first|biggest|highest)\s+(\d{1,2})\b", q_lower)
+        if limit_match:
+            limit = min(20, max(1, int(limit_match.group(2))))
+
+        # Extract severity if present
+        severity = None
+        if "critical" in q_lower:
+            severity = "CRITICAL"
+        elif "high" in q_lower:
+            severity = "HIGH"
+
+        # 5. Follow-Up Resolution using Context
+        if previous_context and ("the biggest" in q_lower or "the first one" in q_lower or "why is it" in q_lower):
+            prev_intent = previous_context.get("intent")
+            if prev_intent in [AskIntent.TOP_EXCEPTIONS, AskIntent.FINANCIAL_DISCREPANCY, AskIntent.MISSING_SETTLEMENTS]:
+                return QueryPlan(
+                    intent=AskIntent.TOP_EXCEPTIONS,
+                    limit=1,
+                    sort_by="financial_impact",
+                    order="desc",
+                    confidence=0.92
+                )
+
+        # 6. Intent Classification Rules
+        # A. Missing Settlements
+        if ("missing settlement" in q_lower or "haven't settled" in q_lower or "have not been settled" in q_lower or
+            "not settled" in q_lower or "unsettled" in q_lower or "no settlement" in q_lower):
+            return QueryPlan(
+                intent=AskIntent.MISSING_SETTLEMENTS,
+                severity=severity,
+                limit=limit,
+                confidence=0.95
+            )
+
+        # B. Duplicate Settlements
+        if "duplicate" in q_lower or "double settlement" in q_lower or "credited twice" in q_lower:
+            return QueryPlan(
+                intent=AskIntent.DUPLICATE_SETTLEMENTS,
+                severity=severity,
+                limit=limit,
+                confidence=0.95
+            )
+
+        # C. Refund Issues
+        if "refund" in q_lower:
+            return QueryPlan(
+                intent=AskIntent.REFUND_ISSUES,
+                severity=severity,
+                limit=limit,
+                confidence=0.95
+            )
+
+        # D. Fee Issues
+        if "fee" in q_lower or "mdr" in q_lower or "surcharge" in q_lower or "processing cost" in q_lower:
+            return QueryPlan(
+                intent=AskIntent.FEE_ISSUES,
+                severity=severity,
+                limit=limit,
+                confidence=0.95
+            )
+
+        # E. Delayed Settlements
+        if "delay" in q_lower or "sla" in q_lower or "late settlement" in q_lower or "took too long" in q_lower:
+            return QueryPlan(
+                intent=AskIntent.DELAYED_SETTLEMENTS,
+                severity=severity,
+                limit=limit,
+                confidence=0.95
+            )
+
+        # F. Top Exceptions & Priority Queue
+        if ("top" in q_lower or "biggest" in q_lower or "highest" in q_lower or "worst" in q_lower or
+            "most important" in q_lower or "priority" in q_lower or "should i investigate" in q_lower):
+            return QueryPlan(
+                intent=AskIntent.TOP_EXCEPTIONS,
+                severity=severity,
+                limit=limit,
+                sort_by="financial_impact",
+                order="desc",
+                confidence=0.95
+            )
+
+        # G. Financial Discrepancy / Money Unexplained
+        if ("unexplained" in q_lower or "money" in q_lower or "discrepancy" in q_lower or
+            "lower than expected" in q_lower or "at risk" in q_lower or "variance" in q_lower or
+            "how much" in q_lower and ("leak" in q_lower or "gap" in q_lower or "lost" in q_lower)):
+            return QueryPlan(
+                intent=AskIntent.FINANCIAL_DISCREPANCY,
+                confidence=0.95
+            )
+
+        # H. Exception Breakdown
+        if ("breakdown" in q_lower or "how many exception" in q_lower or "how many critical" in q_lower or
+            "which exception type" in q_lower or "types of issues" in q_lower or "categories" in q_lower):
+            return QueryPlan(
+                intent=AskIntent.EXCEPTION_BREAKDOWN,
+                confidence=0.95
+            )
+
+        # I. Dataset Summary / Overview
+        if ("summary" in q_lower or "overview" in q_lower or "health" in q_lower or "total transaction" in q_lower or
+            "how many transaction" in q_lower or "how much did i process" in q_lower or "volume" in q_lower or
+            "reconciliation rate" in q_lower or "match rate" in q_lower):
+            return QueryPlan(
+                intent=AskIntent.DATASET_SUMMARY,
+                confidence=0.95
+            )
+
+        # Default fallback: Financial Discrepancy & Summary
+        return QueryPlan(
+            intent=AskIntent.DATASET_SUMMARY,
+            confidence=0.75
+        )
+
+
+query_planner = QueryPlannerService()

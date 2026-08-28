@@ -474,6 +474,103 @@ export async function fetchStoredAIInvestigation(
   return await res.json();
 }
 
+export interface EvidenceItem {
+  label: string;
+  value: string;
+  link?: string;
+  type: string;
+}
+
+export interface AskResponse {
+  success: boolean;
+  conversation_id: string;
+  question: string;
+  intent: string;
+  answer: string;
+  key_findings: string[];
+  evidence: EvidenceItem[];
+  related_exceptions: string[];
+  limitations: string[];
+  metadata: {
+    dataset_id: string;
+    planning_time_ms: number;
+    execution_time_ms: number;
+    generation_time_ms: number;
+    total_time_ms: number;
+    query_plan: any;
+  };
+}
+
+export interface ChatMessage {
+  message_id: string;
+  conversation_id: string;
+  role: "user" | "assistant";
+  content: string;
+  intent?: string;
+  query_plan?: any;
+  evidence?: EvidenceItem[];
+  created_at: string;
+}
+
+export interface ConversationHistoryResponse {
+  conversation_id: string;
+  dataset_id: string;
+  messages: ChatMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+export async function askLeakLens(
+  datasetId: string,
+  question: string,
+  conversationId?: string | null
+): Promise<AskResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/ask/${encodeURIComponent(datasetId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, conversation_id: conversationId || null }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Ask LeakLens failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchConversationHistory(
+  datasetId: string,
+  conversationId: string
+): Promise<ConversationHistoryResponse | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/ask/${encodeURIComponent(datasetId)}/conversations/${encodeURIComponent(conversationId)}`,
+    {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    }
+  );
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+export async function fetchAskSuggestions(datasetId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/ask/${encodeURIComponent(datasetId)}/suggestions`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.suggestions || [];
+  } catch {
+    return [
+      "How much money is currently unexplained?",
+      "Why is today's settlement lower than expected?",
+      "Show me my top 5 discrepancies.",
+      "Which payments haven't settled?",
+      "How many critical issues do I have?",
+      "Which exception type has the highest financial impact?",
+    ];
+  }
+}
+
 export function getDownloadUrl(datasetId: string, fileType: string): string {
   return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }

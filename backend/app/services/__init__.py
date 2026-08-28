@@ -9,6 +9,9 @@ from app.services.reconciliation_engine import reconciliation_engine, Reconcilia
 from app.services.exception_detector import exception_detector, ExceptionDetectionService
 from app.services.exception_evaluator import exception_evaluator, ExceptionEvaluatorService
 from app.services.ai_investigator import ai_investigator, AIInvestigatorService
+from app.services.query_planner import query_planner, QueryPlannerService
+from app.services.query_executor import query_executor, QueryExecutorService
+from app.services.ask_leaklens import ask_service, AskLeakLensService
 
 __all__ = [
     "BaseAIService",
@@ -34,4 +37,10 @@ __all__ = [
     "ExceptionEvaluatorService",
     "ai_investigator",
     "AIInvestigatorService",
+    "query_planner",
+    "QueryPlannerService",
+    "query_executor",
+    "QueryExecutorService",
+    "ask_service",
+    "AskLeakLensService",
 ]

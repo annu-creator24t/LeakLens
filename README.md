@@ -219,7 +219,19 @@ LeakLens introduces an auditable, evidence-grounded AI investigator designed spe
 
 ---
 
-## 10. How to Run Locally
+## 10. 💬 Phase 8: Ask LeakLens Natural Language Investigation
+Ask LeakLens provides a plain-language financial investigation assistant on `/investigate`:
+1. **Architecture**: `User Question` $\rightarrow$ `QueryPlanner` $\rightarrow$ `Safe Backend QueryExecutor (Aggregation-First)` $\rightarrow$ `Structured Financial Evidence` $\rightarrow$ `Grounded AI Reasoning` $\rightarrow$ `Clickable Evidence & Links`.
+2. **Security & Guardrails**:
+   - Zero direct database access for the LLM (no raw MongoDB operators or arbitrary queries).
+   - Built-in regex and semantic defense against prompt injections, credential harvesting, and system prompt exfiltration.
+   - Strictly scoped to active `dataset_id` (mandatory dataset isolation).
+3. **10 Supported Financial Intents**: `DATASET_SUMMARY`, `FINANCIAL_DISCREPANCY`, `EXCEPTION_BREAKDOWN`, `TOP_EXCEPTIONS`, `MISSING_SETTLEMENTS`, `DUPLICATE_SETTLEMENTS`, `REFUND_ISSUES`, `FEE_ISSUES`, `DELAYED_SETTLEMENTS`, and `TRANSACTION_LOOKUP`.
+4. **Interactive Evidence Chips**: Directly links answers to `/transactions/{payment_id}` and `/exceptions/{exception_id}`.
+
+---
+
+## 11. How to Run Locally
 
 ### Option A: Run Backend & Frontend in Two Terminals
 
@@ -240,7 +252,7 @@ Visit **`http://localhost:3000`** in your browser.
 
 ---
 
-## 11. 🧪 Verification & Testing
+## 12. 🧪 Verification & Testing
 Run the complete backend test suite:
 ```powershell
 cd backend

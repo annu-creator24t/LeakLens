@@ -22,6 +22,7 @@ import { fetchAvailableDatasets, generateSyntheticDataset, DatasetItem } from "@
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/investigate", label: "Ask LeakLens", icon: Sparkles },
   { href: "/exceptions", label: "Exceptions", icon: AlertTriangle },
   { href: "/transactions", label: "Transactions", icon: Receipt },
   { href: "/generator", label: "Benchmark Generator", icon: Cpu },

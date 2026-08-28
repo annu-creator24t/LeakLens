@@ -35,6 +35,16 @@ from app.schemas.ai import (
     InvestigationRequest,
     InvestigationResponse,
 )
+from app.schemas.ask import (
+    AskIntent,
+    QueryPlan,
+    EvidenceItem,
+    AskAIAnswer,
+    AskRequest,
+    AskResponse,
+    ChatMessage,
+    ConversationHistoryResponse,
+)
 
 __all__ = [
     "Payment",
@@ -68,4 +78,12 @@ __all__ = [
     "AIInvestigationRecord",
     "InvestigationRequest",
     "InvestigationResponse",
+    "AskIntent",
+    "QueryPlan",
+    "EvidenceItem",
+    "AskAIAnswer",
+    "AskRequest",
+    "AskResponse",
+    "ChatMessage",
+    "ConversationHistoryResponse",
 ]
