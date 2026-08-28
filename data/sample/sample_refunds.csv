@@ -1,0 +1,3 @@
+refund_id,payment_id,refund_amount,refund_status,refund_date
+REF_3001,PAY_1005,500.00,PROCESSED,2026-03-02T11:00:00Z
+REF_3002,PAY_1008,250.00,PROCESSED,2026-03-02T14:30:00Z
