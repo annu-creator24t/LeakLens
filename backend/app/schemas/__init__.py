@@ -65,6 +65,20 @@ from app.schemas.reports import (
     ReportPreviewResponse,
     ReportHistoryListResponse,
 )
+from app.schemas.upload_pipeline import (
+    DatasetStatus,
+    IssueSeverity,
+    ColumnMappingItem,
+    FileUploadInfo,
+    ValidationIssue,
+    FileValidationSummary,
+    UploadSessionState,
+    StartUploadResponse,
+    MappingUpdateRequest,
+    ConfirmDatasetRequest,
+    ConfirmDatasetResponse,
+    DatasetListItem,
+)
 
 __all__ = [
     "Payment",
@@ -122,4 +136,16 @@ __all__ = [
     "ReportGenerateResponse",
     "ReportPreviewResponse",
     "ReportHistoryListResponse",
+    "DatasetStatus",
+    "IssueSeverity",
+    "ColumnMappingItem",
+    "FileUploadInfo",
+    "ValidationIssue",
+    "FileValidationSummary",
+    "UploadSessionState",
+    "StartUploadResponse",
+    "MappingUpdateRequest",
+    "ConfirmDatasetRequest",
+    "ConfirmDatasetResponse",
+    "DatasetListItem",
 ]

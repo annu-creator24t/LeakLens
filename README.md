@@ -245,6 +245,21 @@ LeakLens transforms from a pure anomaly detection engine into a full-cycle merch
 
 ---
 
+## 12. 📁 Phase 11: Real Data Upload & Validation
+LeakLens provides a production-grade multi-step CSV ingestion workflow on `/upload`:
+1. **Multi-File Support**: Dedicated ingestion for `payments.csv`, `settlements.csv`, `refunds.csv`, and `fees.csv` (Max 25 MB per file, max 100 MB total).
+2. **Security & Sanitization**: Filename sanitization strictly prevents path traversal sequences (`../../secret.env`), verifies UTF-8/BOM encodings, and rejects binary corruption.
+3. **Schema Auto-Detection**: Heuristic column mapping detects common naming variations (`txn_id` $\rightarrow$ `payment_id`, `gross_amount` $\rightarrow$ `amount`) with confidence scores and manual override options.
+4. **Data Normalization & Validation**:
+   - Monetary amounts converted strictly to `Decimal` (stripping currency symbols, rejecting negative values).
+   - ISO date standardization.
+   - Duplicate ID detection.
+   - Cross-file validation: Orphan settlements/refunds referencing uncaptured payments are retained as `WARNING` items rather than silently dropped, allowing downstream detection.
+5. **Zero Silent Data Loss**: Every transformation is explicit and audited.
+6. **Auto-Reconciliation Trigger**: Committing an imported dataset immediately executes reconciliation and exception detection, preparing the dashboard and action center instantly.
+
+---
+
 ### Option A: Run Backend & Frontend in Two Terminals
 
 **Terminal 1 (Backend):**

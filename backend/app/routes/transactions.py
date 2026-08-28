@@ -19,19 +19,35 @@ async def list_available_datasets():
     """
     Returns list of active datasets and generated benchmarks for dataset selection.
     """
+    from app.services.upload_pipeline import upload_pipeline
     datasets = []
     
-    # 1. From generator cache / folders
-    for ds_id, meta in data_generator.list_generated_datasets().items():
+    # 1. From upload pipeline (both DB and memory uploads + generator)
+    pipeline_ds = await upload_pipeline.list_all_datasets()
+    for d in pipeline_ds:
         datasets.append({
-            "dataset_id": ds_id,
-            "name": f"Benchmark ({meta.get('transaction_count', 0):,} txs - {meta.get('anomaly_rate', 0)*100:.0f}% anomalies)",
-            "transaction_count": meta.get("transaction_count", 0),
-            "created_at": meta.get("generated_at"),
-            "type": "BENCHMARK"
+            "dataset_id": d.dataset_id,
+            "name": d.name,
+            "transaction_count": d.transaction_count,
+            "created_at": d.created_at,
+            "type": d.source_type,
+            "exception_count": d.exception_count,
+            "total_volume": d.total_volume,
+            "unexplained_difference": d.unexplained_difference
         })
 
-    # 2. From dataset service
+    # 2. From generator cache / folders
+    for ds_id, meta in data_generator.list_generated_datasets().items():
+        if not any(x["dataset_id"] == ds_id for x in datasets):
+            datasets.append({
+                "dataset_id": ds_id,
+                "name": f"Benchmark ({meta.get('transaction_count', 0):,} txs - {meta.get('anomaly_rate', 0)*100:.0f}% anomalies)",
+                "transaction_count": meta.get("transaction_count", 0),
+                "created_at": meta.get("generated_at"),
+                "type": "BENCHMARK"
+            })
+
+    # 3. From dataset service memory
     for sess_id in dataset_service._memory_sessions.keys():
         if not any(d["dataset_id"] == sess_id for d in datasets):
             datasets.append({

@@ -1,476 +1,646 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  UploadCloud,
+  FileSpreadsheet,
+  Upload,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  FileText,
-  Trash2,
-  RefreshCw,
   ArrowRight,
-  ArrowLeft,
+  RefreshCw,
+  Layers,
+  FileCheck,
+  Table,
+  Eye,
   ShieldCheck,
+  ChevronRight,
   Info,
-  Database,
-  FileSpreadsheet,
+  Play,
+  RotateCcw
 } from "lucide-react";
-import { uploadFinancialFile, UploadResponse, ValidationErrorItem } from "@/lib/api";
+import AppShell from "@/components/layout/AppShell";
+import {
+  startUploadSession,
+  uploadSessionFile,
+  updateColumnMappings,
+  validateUploadSession,
+  confirmAndImportDataset,
+  UploadSessionState,
+  FileUploadInfo,
+  ConfirmDatasetResponse
+} from "@/lib/api";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 
-type FileType = "payments" | "settlements" | "refunds" | "fees";
-
-interface FileCardState {
-  fileType: FileType;
-  title: string;
-  filename: string;
-  description: string;
-  requiredColumns: string[];
-  file: File | null;
-  uploading: boolean;
-  validated: boolean;
-  totalRows: number;
-  validRows: number;
-  invalidRows: number;
-  errors: ValidationErrorItem[];
-  warnings: ValidationErrorItem[];
-}
-
-const INITIAL_CARDS: Record<FileType, FileCardState> = {
-  payments: {
-    fileType: "payments",
-    title: "1. Payments",
-    filename: "payments.csv",
-    description: "Captured customer transactions, amounts, and payment methods.",
-    requiredColumns: ["payment_id", "order_id", "merchant_id", "amount", "currency", "payment_status", "payment_method", "created_at"],
-    file: null,
-    uploading: false,
-    validated: false,
-    totalRows: 0,
-    validRows: 0,
-    invalidRows: 0,
-    errors: [],
-    warnings: [],
-  },
-  settlements: {
-    fileType: "settlements",
-    title: "2. Settlements",
-    filename: "settlements.csv",
-    description: "Bank settlement payouts credited by payment gateway.",
-    requiredColumns: ["settlement_id", "payment_id", "settlement_amount", "settlement_status", "settlement_date"],
-    file: null,
-    uploading: false,
-    validated: false,
-    totalRows: 0,
-    validRows: 0,
-    invalidRows: 0,
-    errors: [],
-    warnings: [],
-  },
-  refunds: {
-    fileType: "refunds",
-    title: "3. Refunds",
-    filename: "refunds.csv",
-    description: "Customer refund adjustments and return deductions.",
-    requiredColumns: ["refund_id", "payment_id", "refund_amount", "refund_status", "refund_date"],
-    file: null,
-    uploading: false,
-    validated: false,
-    totalRows: 0,
-    validRows: 0,
-    invalidRows: 0,
-    errors: [],
-    warnings: [],
-  },
-  fees: {
-    fileType: "fees",
-    title: "4. Fees & Taxes",
-    filename: "fees.csv",
-    description: "MDR processing fee deductions and applicable GST.",
-    requiredColumns: ["payment_id", "fee_amount", "tax_amount"],
-    file: null,
-    uploading: false,
-    validated: false,
-    totalRows: 0,
-    validRows: 0,
-    invalidRows: 0,
-    errors: [],
-    warnings: [],
-  },
+const REQUIRED_TARGETS: Record<string, string[]> = {
+  payments: ["payment_id", "amount", "payment_status"],
+  settlements: ["settlement_id", "payment_id", "settlement_amount", "settlement_status", "settlement_date"],
+  refunds: ["refund_id", "payment_id", "refund_amount", "refund_status", "refund_date"],
+  fees: ["payment_id", "fee_amount"],
 };
 
 export default function UploadPage() {
   const router = useRouter();
-  const [cards, setCards] = useState<Record<FileType, FileCardState>>(INITIAL_CARDS);
-  const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
-  const [expandedErrors, setExpandedErrors] = useState<Record<FileType, boolean>>({
-    payments: false,
-    settlements: false,
-    refunds: false,
-    fees: false,
-  });
 
-  const handleFileUpload = async (fileType: FileType, file: File) => {
-    // Set uploading state
-    setCards((prev) => ({
-      ...prev,
-      [fileType]: {
-        ...prev[fileType],
-        file,
-        uploading: true,
-        errors: [],
-        warnings: [],
-      },
-    }));
+  const [step, setStep] = useState<number>(1);
+  const [uploadId, setUploadId] = useState<string>("");
+  const [session, setSession] = useState<UploadSessionState | null>(null);
+  
+  // File upload state
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [dragOverType, setDragOverType] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  // Validation & Confirmation
+  const [validating, setValidating] = useState<boolean>(false);
+  const [confirming, setConfirming] = useState<boolean>(false);
+  const [datasetName, setDatasetName] = useState<string>("");
+  const [finalResult, setFinalResult] = useState<ConfirmDatasetResponse | null>(null);
+
+  // Issues modal state
+  const [showIssuesModal, setShowIssuesModal] = useState<boolean>(false);
+
+  // Initialize session on mount
+  useEffect(() => {
+    initSession();
+  }, []);
+
+  const initSession = async () => {
+    setError(null);
     try {
-      const response: UploadResponse = await uploadFinancialFile(
-        fileType,
-        file,
-        activeDatasetId || undefined
-      );
-
-      // Save dataset_id session
-      if (response.dataset_id && !activeDatasetId) {
-        setActiveDatasetId(response.dataset_id);
-      }
-
-      setCards((prev) => ({
-        ...prev,
-        [fileType]: {
-          ...prev[fileType],
-          uploading: false,
-          validated: response.success,
-          totalRows: response.summary.total_rows,
-          validRows: response.summary.valid_rows,
-          invalidRows: response.summary.invalid_rows,
-          errors: response.errors,
-          warnings: response.warnings,
-        },
-      }));
-
-      if (!response.success && response.errors.length > 0) {
-        setExpandedErrors((prev) => ({ ...prev, [fileType]: true }));
-      }
+      const res = await startUploadSession();
+      setUploadId(res.upload_id);
     } catch (err) {
-      setCards((prev) => ({
-        ...prev,
+      setError(err instanceof Error ? err.message : "Failed to initialize upload session.");
+    }
+  };
+
+  const handleFileUpload = async (fileType: string, file: File) => {
+    if (!uploadId) return;
+    setUploadingType(fileType);
+    setError(null);
+    try {
+      const info = await uploadSessionFile(uploadId, fileType, file);
+      setSession((prev) => {
+        const files = prev ? { ...prev.files, [fileType]: info } : { [fileType]: info };
+        return {
+          upload_id: uploadId,
+          status: "UPLOADING",
+          files,
+          validation_summaries: prev?.validation_summaries || {},
+          issues: prev?.issues || [],
+          created_at: prev?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_ready_to_confirm: false,
+        };
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to upload ${fileType} file.`);
+    } finally {
+      setUploadingType(null);
+    }
+  };
+
+  const handleMappingChange = (fileType: string, srcCol: string, targetField: string) => {
+    if (!session || !session.files[fileType]) return;
+    const fileInfo = session.files[fileType];
+    const updatedMappings = fileInfo.column_mappings.map((m) =>
+      m.source_column === srcCol
+        ? { ...m, target_field: targetField, is_mapped: Boolean(targetField) }
+        : m
+    );
+
+    const mappingMap: Record<string, string> = {};
+    updatedMappings.forEach((m) => {
+      mappingMap[m.source_column] = m.target_field;
+    });
+
+    setSession({
+      ...session,
+      files: {
+        ...session.files,
         [fileType]: {
-          ...prev[fileType],
-          uploading: false,
-          validated: false,
-          errors: [
-            {
-              row: 1,
-              code: "UPLOAD_FAILED",
-              message: err instanceof Error ? err.message : "Network error during upload.",
-            },
-          ],
+          ...fileInfo,
+          column_mappings: updatedMappings,
         },
-      }));
-      setExpandedErrors((prev) => ({ ...prev, [fileType]: true }));
+      },
+    });
+
+    updateColumnMappings(uploadId, fileType, mappingMap).catch(() => {});
+  };
+
+  const handleRunValidation = async () => {
+    if (!uploadId) return;
+    setValidating(true);
+    setError(null);
+    try {
+      const valState = await validateUploadSession(uploadId);
+      setSession(valState);
+      setStep(3);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Validation failed.");
+    } finally {
+      setValidating(false);
     }
   };
 
-  const handleFileChange = (fileType: FileType, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileUpload(fileType, file);
+  const handleConfirmImport = async () => {
+    if (!uploadId) return;
+    setConfirming(true);
+    setError(null);
+    try {
+      const res = await confirmAndImportDataset(uploadId, datasetName.trim() || undefined);
+      setFinalResult(res);
+      setStep(5);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import dataset.");
+    } finally {
+      setConfirming(false);
     }
   };
 
-  const handleDrop = (fileType: FileType, e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      handleFileUpload(fileType, file);
-    }
-  };
-
-  const handleResetCard = (fileType: FileType) => {
-    setCards((prev) => ({
-      ...prev,
-      [fileType]: INITIAL_CARDS[fileType],
-    }));
-  };
-
-  const validatedCount = Object.values(cards).filter((c) => c.validated).length;
+  const hasPayments = Boolean(session?.files?.payments);
 
   return (
-    <div className="min-h-screen bg-[#080b11] text-slate-100 flex flex-col justify-between fintech-grid">
-      {/* Header */}
-      <header className="border-b border-slate-800/80 bg-[#080b11]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link
-              href="/"
-              className="flex items-center space-x-2 text-slate-400 hover:text-white transition-colors text-xs font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
-            </Link>
-            <div className="h-4 w-px bg-slate-800" />
-            <div className="flex items-center space-x-2">
-              <span className="font-semibold text-white tracking-tight">LEAKLENS</span>
-              <span className="text-slate-500">/</span>
-              <span className="text-slate-300 text-sm font-medium">Dataset Ingestion & Validation</span>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            {activeDatasetId && (
-              <div className="flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-950/60 border border-blue-800/50 text-blue-400 text-xs font-mono">
-                <Database className="w-3.5 h-3.5" />
-                <span>Session: {activeDatasetId}</span>
-              </div>
-            )}
-            <div className="text-xs text-slate-400 font-mono px-2.5 py-1 rounded bg-slate-900 border border-slate-800">
-              Phase 2 Active
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-10 flex-1 w-full space-y-8">
+    <AppShell>
+      <div className="space-y-6 max-w-5xl">
         
-        {/* Page Hero Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/70">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
-              <span>Upload Financial Records</span>
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Upload the 4 merchant settlement CSVs. Every record will be validated against strict schemas and normalized into decimal precision.
-            </p>
-          </div>
-
-          {/* Quick Info Badge */}
-          <div className="flex items-center space-x-2 text-xs bg-slate-900/90 border border-slate-800 px-3.5 py-2 rounded-lg text-slate-400">
-            <Info className="w-4 h-4 text-blue-400 flex-shrink-0" />
-            <span>Strict zero-float decimal precision & column validation active.</span>
-          </div>
+        {/* Header */}
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+              <FileSpreadsheet className="w-4 h-4" />
+            </div>
+            <span>Import Financial Data</span>
+          </h1>
+          <p className="text-slate-400 text-xs mt-0.5">
+            Upload merchant payment, settlement, refund, and fee exports for deterministic reconciliation.
+          </p>
         </div>
 
-        {/* 4 Cards Grid */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {(Object.keys(cards) as FileType[]).map((key) => {
-            const card = cards[key];
-            const hasErrors = card.errors.length > 0;
-
-            return (
+        {/* Step Indicator */}
+        <div className="p-3.5 rounded-xl bg-[#0c121e] border border-slate-800 flex items-center justify-between overflow-x-auto text-xs font-mono">
+          {[
+            { num: 1, label: "Upload Files" },
+            { num: 2, label: "Map Columns" },
+            { num: 3, label: "Validate Records" },
+            { num: 4, label: "Preview & Confirm" },
+            { num: 5, label: "Complete" },
+          ].map((st, idx) => (
+            <div key={st.num} className="flex items-center space-x-2 shrink-0">
               <div
-                key={key}
-                className={`rounded-xl border transition-all duration-200 bg-[#0c121e] flex flex-col justify-between ${
-                  card.validated
-                    ? "border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.08)]"
-                    : hasErrors
-                    ? "border-rose-500/40 shadow-[0_0_20px_rgba(244,63,94,0.08)]"
-                    : "border-slate-800 hover:border-slate-700"
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                  step === st.num
+                    ? "bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]"
+                    : step > st.num
+                    ? "bg-emerald-600/30 text-emerald-400 border border-emerald-500/40"
+                    : "bg-slate-900 border border-slate-800 text-slate-500"
                 }`}
               >
-                {/* Card Top Header */}
-                <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
-                        card.validated
-                          ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/60"
-                          : hasErrors
-                          ? "bg-rose-950/60 text-rose-400 border border-rose-800/60"
-                          : "bg-slate-900 text-slate-400 border border-slate-800"
-                      }`}
-                    >
-                      <FileSpreadsheet className="w-4 h-4" />
-                    </div>
+                {step > st.num ? "✓" : st.num}
+              </div>
+              <span className={step >= st.num ? "text-slate-200 font-semibold" : "text-slate-500"}>
+                {st.label}
+              </span>
+              {idx < 4 && <ChevronRight className="w-3.5 h-3.5 text-slate-700 ml-1 mr-1" />}
+            </div>
+          ))}
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="p-4 rounded-lg bg-rose-950/40 border border-rose-900 text-xs text-rose-300">
+            {error}
+          </div>
+        )}
+
+        {/* STEP 1: UPLOAD FILES */}
+        {step === 1 && (
+          <div className="space-y-6">
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                { type: "payments", title: "1. Payments Export", desc: "Captured transactions (Mandatory)", required: true },
+                { type: "settlements", title: "2. Settlements Export", desc: "Bank payout batch records", required: false },
+                { type: "refunds", title: "3. Refunds Export", desc: "Customer refunds and chargebacks", required: false },
+                { type: "fees", title: "4. Fees & Taxes Export", desc: "MDR deductions and GST records", required: false },
+              ].map((card) => {
+                const fileInfo = session?.files?.[card.type];
+                const isUploading = uploadingType === card.type;
+                const isDragOver = dragOverType === card.type;
+
+                return (
+                  <div
+                    key={card.type}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverType(card.type); }}
+                    onDragLeave={() => setDragOverType(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOverType(null);
+                      if (e.dataTransfer.files?.[0]) {
+                        handleFileUpload(card.type, e.dataTransfer.files[0]);
+                      }
+                    }}
+                    className={`p-5 rounded-xl border transition-all flex flex-col justify-between space-y-4 ${
+                      isDragOver
+                        ? "bg-blue-950/30 border-blue-500 shadow-lg"
+                        : fileInfo
+                        ? "bg-[#0c121e] border-emerald-800/60"
+                        : "bg-[#0c121e] border-slate-800 hover:border-slate-700"
+                    }`}
+                  >
                     <div>
-                      <h2 className="text-sm font-semibold text-white tracking-tight">{card.title}</h2>
-                      <span className="text-[11px] text-slate-400 font-mono">{card.filename}</span>
-                    </div>
-                  </div>
-
-                  {/* Status Pill */}
-                  {card.uploading && (
-                    <span className="flex items-center space-x-1.5 text-xs text-blue-400 font-mono px-2.5 py-1 rounded bg-blue-950/50 border border-blue-900/50 animate-pulse">
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      <span>Validating...</span>
-                    </span>
-                  )}
-                  {card.validated && (
-                    <span className="flex items-center space-x-1.5 text-xs text-emerald-400 font-mono px-2.5 py-1 rounded bg-emerald-950/50 border border-emerald-900/50">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Validated</span>
-                    </span>
-                  )}
-                  {hasErrors && !card.uploading && (
-                    <span className="flex items-center space-x-1.5 text-xs text-rose-400 font-mono px-2.5 py-1 rounded bg-rose-950/50 border border-rose-900/50">
-                      <XCircle className="w-3.5 h-3.5" />
-                      <span>Validation Error</span>
-                    </span>
-                  )}
-                  {!card.file && !card.uploading && (
-                    <span className="text-xs text-slate-500 font-mono px-2 py-0.5 rounded bg-slate-900">
-                      Pending
-                    </span>
-                  )}
-                </div>
-
-                {/* Card Body / Drag & Drop Area */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <p className="text-xs text-slate-400">{card.description}</p>
-
-                  {!card.file ? (
-                    <div
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => handleDrop(key, e)}
-                      className="border-2 border-dashed border-slate-800 hover:border-blue-500/50 rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-slate-950/30 group"
-                      onClick={() => document.getElementById(`file-input-${key}`)?.click()}
-                    >
-                      <UploadCloud className="w-8 h-8 text-slate-500 group-hover:text-blue-400 transition-colors mb-2" />
-                      <p className="text-xs font-medium text-slate-300">
-                        Drag and drop <span className="font-mono text-blue-400">{card.filename}</span> here
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-1">or click to browse from device</p>
-                      <input
-                        id={`file-input-${key}`}
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        onChange={(e) => handleFileChange(key, e)}
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* Uploaded File Info Bar */}
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
-                        <div className="flex items-center space-x-2 truncate">
-                          <FileText className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                          <span className="font-mono text-slate-200 truncate">{card.file.name}</span>
-                          <span className="text-slate-500 text-[11px]">
-                            ({(card.file.size / 1024).toFixed(1)} KB)
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-white tracking-tight flex items-center space-x-1.5">
+                          <span>{card.title}</span>
+                          {card.required && (
+                            <span className="text-[10px] text-rose-400 font-mono">*Req</span>
+                          )}
+                        </h3>
+                        {fileInfo && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-300 flex items-center space-x-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Uploaded</span>
                           </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">{card.desc}</p>
+                    </div>
+
+                    {fileInfo ? (
+                      <div className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 space-y-1 text-[11px] font-mono">
+                        <div className="flex justify-between text-slate-300">
+                          <span className="truncate max-w-[200px]">{fileInfo.original_filename}</span>
+                          <span className="text-slate-500">{(fileInfo.file_size_bytes / 1024).toFixed(1)} KB</span>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => handleResetCard(key)}
-                            className="text-slate-500 hover:text-rose-400 transition-colors p-1"
-                            title="Remove file"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="text-slate-500">
+                          {formatNumber(fileInfo.row_count)} rows • {fileInfo.headers.length} columns detected
                         </div>
                       </div>
-
-                      {/* Validation Stats */}
-                      {card.validated && (
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                          <div className="p-2 rounded bg-slate-900/50 border border-slate-800/80">
-                            <span className="text-[10px] text-slate-500 uppercase font-mono">Total Rows</span>
-                            <p className="font-bold font-mono text-slate-200">{card.totalRows.toLocaleString()}</p>
-                          </div>
-                          <div className="p-2 rounded bg-emerald-950/20 border border-emerald-900/30">
-                            <span className="text-[10px] text-emerald-500 uppercase font-mono">Valid</span>
-                            <p className="font-bold font-mono text-emerald-400">{card.validRows.toLocaleString()}</p>
-                          </div>
-                          <div className="p-2 rounded bg-slate-900/50 border border-slate-800/80">
-                            <span className="text-[10px] text-slate-500 uppercase font-mono">Invalid</span>
-                            <p className="font-bold font-mono text-slate-400">{card.invalidRows}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Errors Panel */}
-                      {hasErrors && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs text-rose-400">
-                            <span className="font-semibold flex items-center space-x-1">
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                              <span>{card.errors.length} validation issue(s) detected</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedErrors((prev) => ({ ...prev, [key]: !prev[key] }))
-                              }
-                              className="text-[11px] underline hover:text-rose-300"
-                            >
-                              {expandedErrors[key] ? "Hide details" : "View details"}
-                            </button>
-                          </div>
-
-                          {expandedErrors[key] && (
-                            <div className="max-h-36 overflow-y-auto space-y-1.5 p-3 rounded-lg bg-rose-950/30 border border-rose-900/40 text-xs font-mono">
-                              {card.errors.map((err, idx) => (
-                                <div key={idx} className="text-rose-300 text-[11px] leading-relaxed border-b border-rose-900/30 pb-1 last:border-b-0">
-                                  <strong className="text-rose-200">Row {err.row}</strong> [{err.code}]: {err.message}
-                                  {err.raw_value && <span className="text-slate-400"> (value: &quot;{err.raw_value}&quot;)</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Schema Requirements Pill */}
-                  <div className="pt-2 border-t border-slate-800/60">
-                    <p className="text-[10px] text-slate-500 font-mono">
-                      Required cols: {card.requiredColumns.join(", ")}
-                    </p>
+                    ) : (
+                      <label className="border border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-slate-950/40">
+                        <input
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) handleFileUpload(card.type, e.target.files[0]);
+                          }}
+                        />
+                        {isUploading ? (
+                          <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
+                        ) : (
+                          <Upload className="w-5 h-5 text-slate-500 mb-1" />
+                        )}
+                        <span className="text-xs font-medium text-slate-300 mt-1">
+                          {isUploading ? "Uploading..." : "Click or drag CSV here"}
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-0.5">Max 25 MB</span>
+                      </label>
+                    )}
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Bottom Action & Progress Bar */}
-        <div className="p-6 rounded-xl bg-[#0c121e] border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 rounded-full bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold font-mono text-sm">
-              {validatedCount}/4
+                );
+              })}
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">
-                {validatedCount === 4
-                  ? "All 4 Financial Datasets Validated"
-                  : `${validatedCount} of 4 Datasets Uploaded & Validated`}
-              </h3>
-              <p className="text-xs text-slate-400">
-                {validatedCount === 4
-                  ? "Your session dataset is isolated and normalized in storage. Ready for Phase 3/4."
-                  : "Upload all 4 CSVs to unlock the complete end-to-end reconciliation flow."}
+
+            {/* Step 1 Actions */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#0c121e] border border-slate-800">
+              <span className="text-xs text-slate-400">
+                {hasPayments
+                  ? "Payments export uploaded. Ready to review column mappings."
+                  : "Please upload at least the Payments CSV export to proceed."}
+              </span>
+
+              <button
+                type="button"
+                disabled={!hasPayments}
+                onClick={() => setStep(2)}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                <span>Continue to Column Mapping</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: MAP COLUMNS */}
+        {step === 2 && session && (
+          <div className="space-y-6">
+            <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-900/40 text-xs text-slate-300 flex items-start space-x-2.5">
+              <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+              <p>
+                LeakLens auto-detected source column names using schema heuristics. Review and adjust any mappings below.
+                Required fields are indicated with an asterisk.
               </p>
             </div>
-          </div>
 
-          <div className="flex items-center space-x-3">
-            <button
-              type="button"
-              disabled={validatedCount === 0}
-              onClick={() => router.push(`/reconciliation?dataset_id=${activeDatasetId || ""}`)}
-              className={`px-6 py-3 rounded-lg font-medium text-sm flex items-center space-x-2 transition-all ${
-                validatedCount > 0
-                  ? "bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-[0_0_20px_rgba(37,99,235,0.3)]"
-                  : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
-              }`}
-            >
-              <span>Continue to Reconciliation</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </main>
+            {Object.entries(session.files).map(([ftype, finfo]) => (
+              <div key={ftype} className="p-6 rounded-xl bg-[#0c121e] border border-slate-800 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    {ftype} Column Mappings
+                  </h3>
+                  <span className="text-xs font-mono text-slate-400">
+                    File: {finfo.original_filename} ({finfo.row_count} rows)
+                  </span>
+                </div>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>© 2026 LeakLens. Razorpay AI Buildathon — Track 04: AI Finance Controller. Phase 2 Ingestion.</p>
-      </footer>
-    </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs font-mono text-left">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400">
+                        <th className="py-2 px-3">Source CSV Column</th>
+                        <th className="py-2 px-3">Confidence</th>
+                        <th className="py-2 px-3">Mapped LeakLens Field</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                      {finfo.column_mappings.map((m) => (
+                        <tr key={m.source_column} className="hover:bg-slate-950/40">
+                          <td className="py-2.5 px-3 font-semibold text-slate-200">
+                            {m.source_column}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                              m.confidence >= 0.9 ? "bg-emerald-950 text-emerald-400" : m.confidence > 0 ? "bg-amber-950 text-amber-400" : "bg-slate-900 text-slate-500"
+                            }`}>
+                              {Math.round(m.confidence * 100)}%
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <select
+                              value={m.target_field}
+                              onChange={(e) => handleMappingChange(ftype, m.source_column, e.target.value)}
+                              className="p-1.5 bg-slate-950 border border-slate-800 rounded text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+                            >
+                              <option value="">-- Do Not Import --</option>
+                              {m.alternatives.concat(m.target_field ? [m.target_field] : []).filter((v, i, a) => a.indexOf(v) === i).map((alt) => (
+                                <option key={alt} value={alt}>
+                                  {alt} {REQUIRED_TARGETS[ftype]?.includes(alt) ? "*" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+
+            {/* Step 2 Actions */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#0c121e] border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium"
+              >
+                Back to Upload
+              </button>
+
+              <button
+                type="button"
+                disabled={validating}
+                onClick={handleRunValidation}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                {validating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>{validating ? "Validating..." : "Validate & Check Records"}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: VALIDATE RECORDS */}
+        {step === 3 && session && (
+          <div className="space-y-6">
+            
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Object.entries(session.validation_summaries).map(([ftype, vsum]) => (
+                <div key={ftype} className="p-4 rounded-xl bg-[#0c121e] border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white uppercase">{ftype}</span>
+                    {vsum.error_count === 0 ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-rose-400" />
+                    )}
+                  </div>
+                  <div className="text-xl font-bold font-mono text-white">
+                    {formatNumber(vsum.valid_rows)} <span className="text-xs text-slate-500 font-sans">/ {vsum.total_rows}</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400">
+                    <span className="text-amber-400">⚠ {vsum.warning_count} Warnings</span>
+                    <span className="text-rose-400">❌ {vsum.error_count} Errors</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Validation Issues Bar */}
+            {session.issues.length > 0 && (
+              <div className="p-5 rounded-xl bg-[#0c121e] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    <span>Validation Issues & Warnings ({session.issues.length})</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowIssuesModal(true)}
+                    className="text-xs text-blue-400 hover:underline font-mono"
+                  >
+                    View Details
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {session.issues.slice(0, 5).map((iss) => (
+                    <div key={iss.issue_id} className="p-2 rounded bg-slate-950 border border-slate-800/80 text-[11px] font-mono flex items-center justify-between text-slate-300">
+                      <span>Row {iss.row_number} ({iss.file_type}): {iss.message}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        iss.severity === "ERROR" ? "bg-rose-950 text-rose-400" : "bg-amber-950 text-amber-400"
+                      }`}>{iss.severity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 3 Actions */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#0c121e] border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium"
+              >
+                Back to Mappings
+              </button>
+
+              <button
+                type="button"
+                disabled={!session.is_ready_to_confirm}
+                onClick={() => setStep(4)}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                <span>Preview & Confirm Import</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: PREVIEW & CONFIRM */}
+        {step === 4 && session && (
+          <div className="space-y-6">
+            
+            <div className="p-6 rounded-xl bg-[#0c121e] border border-slate-800 space-y-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                Import Session Confirmation
+              </h3>
+
+              <div className="space-y-2">
+                <label className="text-xs font-mono text-slate-400">Dataset Name (Optional):</label>
+                <input
+                  type="text"
+                  placeholder="e.g. August Financial Settlement Export"
+                  value={datasetName}
+                  onChange={(e) => setDatasetName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Sample Preview Rows */}
+              {session.validation_summaries?.payments?.preview_rows?.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <span className="text-xs font-bold text-slate-300">Sample Payments (First 5 Rows):</span>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs font-mono text-left">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="py-2 px-3">Payment ID</th>
+                          <th className="py-2 px-3">Amount</th>
+                          <th className="py-2 px-3">Status</th>
+                          <th className="py-2 px-3">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                        {session.validation_summaries.payments.preview_rows.slice(0, 5).map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-950/40">
+                            <td className="py-2 px-3 text-blue-400">{row.payment_id}</td>
+                            <td className="py-2 px-3">{formatCurrency(row.amount)}</td>
+                            <td className="py-2 px-3">{row.payment_status}</td>
+                            <td className="py-2 px-3">{row.created_at || "N/A"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Step 4 Actions */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#0c121e] border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium"
+              >
+                Back to Validation
+              </button>
+
+              <button
+                type="button"
+                disabled={confirming}
+                onClick={handleConfirmImport}
+                className="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center space-x-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] cursor-pointer"
+              >
+                {confirming ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                <span>{confirming ? "Reconciling Dataset..." : "Import & Auto-Reconcile Dataset"}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 5: COMPLETE */}
+        {step === 5 && finalResult && (
+          <div className="p-8 rounded-2xl bg-[#0c121e] border border-emerald-800/60 shadow-2xl text-center space-y-6">
+            <div className="w-16 h-16 rounded-full bg-emerald-950/80 border border-emerald-600 flex items-center justify-center text-emerald-400 mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                Dataset Imported & Reconciled Successfully!
+              </h2>
+              <p className="text-xs text-slate-400 mt-1 font-mono">
+                Dataset ID: <span className="text-blue-400">{finalResult.dataset_id}</span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs max-w-2xl mx-auto">
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 text-[10px] block">Total Processed</span>
+                <span className="text-sm font-bold text-white mt-0.5 block">
+                  {formatCurrency(finalResult.reconciliation_summary?.total_volume || 0)}
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 text-[10px] block">Expected Net</span>
+                <span className="text-sm font-bold text-blue-400 mt-0.5 block">
+                  {formatCurrency(finalResult.reconciliation_summary?.expected_settlement || 0)}
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 text-[10px] block">Exceptions</span>
+                <span className="text-sm font-bold text-rose-400 mt-0.5 block">
+                  {finalResult.exceptions_detected} Flagged
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 text-[10px] block">Match Rate</span>
+                <span className="text-sm font-bold text-emerald-400 mt-0.5 block">
+                  {finalResult.reconciliation_summary?.reconciliation_rate || 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <Link
+                href={`/dashboard?dataset_id=${finalResult.dataset_id}`}
+                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-lg"
+              >
+                <span>View Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <Link
+                href={`/action-center?dataset_id=${finalResult.dataset_id}`}
+                className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+              >
+                <span>Open Action Center</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  initSession();
+                  setSession(null);
+                  setFinalResult(null);
+                }}
+                className="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-medium"
+              >
+                Import Another Dataset
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </AppShell>
   );
 }

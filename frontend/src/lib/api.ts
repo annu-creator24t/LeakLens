@@ -910,3 +910,179 @@ export function getReportDownloadUrl(datasetId: string, reportId: string): strin
 export function getCsvExportUrl(datasetId: string, tableType: string): string {
   return `${API_BASE_URL}/api/exports/${encodeURIComponent(datasetId)}/${encodeURIComponent(tableType)}.csv`;
 }
+
+export interface ColumnMappingItem {
+  source_column: string;
+  target_field: string;
+  confidence: number;
+  is_required: boolean;
+  is_mapped: boolean;
+  alternatives: string[];
+}
+
+export interface FileUploadInfo {
+  file_type: string;
+  original_filename: string;
+  file_size_bytes: number;
+  row_count: number;
+  headers: string[];
+  column_mappings: ColumnMappingItem[];
+  uploaded_at: string;
+  is_valid: boolean;
+}
+
+export interface ValidationIssue {
+  issue_id: string;
+  file_type: string;
+  row_number: number;
+  column: string;
+  code: string;
+  severity: "WARNING" | "ERROR";
+  message: string;
+  raw_value?: string;
+}
+
+export interface FileValidationSummary {
+  file_type: string;
+  total_rows: number;
+  valid_rows: number;
+  warning_count: number;
+  error_count: number;
+  is_blocking: boolean;
+  preview_rows: Record<string, any>[];
+}
+
+export interface UploadSessionState {
+  upload_id: string;
+  status: string;
+  files: Record<string, FileUploadInfo>;
+  validation_summaries: Record<string, FileValidationSummary>;
+  issues: ValidationIssue[];
+  created_at: string;
+  updated_at: string;
+  is_ready_to_confirm: boolean;
+}
+
+export interface StartUploadResponse {
+  success: boolean;
+  upload_id: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ConfirmDatasetResponse {
+  success: boolean;
+  dataset_id: string;
+  dataset_name: string;
+  status: string;
+  reconciliation_summary?: Record<string, any>;
+  exceptions_detected: number;
+  created_at: string;
+}
+
+export interface DatasetListItem {
+  dataset_id: string;
+  name: string;
+  source_type: string;
+  status: string;
+  transaction_count: number;
+  exception_count: number;
+  total_volume: number;
+  unexplained_difference: number;
+  created_at: string;
+  files: string[];
+}
+
+export async function startUploadSession(): Promise<StartUploadResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/upload/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`Failed to start upload session: ${res.status}`);
+  return await res.json();
+}
+
+export async function uploadSessionFile(
+  uploadId: string,
+  fileType: string,
+  file: File
+): Promise<FileUploadInfo> {
+  const formData = new FormData();
+  formData.append("file_type", fileType);
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE_URL}/api/upload/${encodeURIComponent(uploadId)}/file`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to upload ${fileType} file: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function updateColumnMappings(
+  uploadId: string,
+  fileType: string,
+  mappings: Record<string, string>
+): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/upload/${encodeURIComponent(uploadId)}/mapping`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_type: fileType, mappings }),
+  });
+  if (!res.ok) throw new Error(`Failed to update column mappings: ${res.status}`);
+  return await res.json();
+}
+
+export async function validateUploadSession(uploadId: string): Promise<UploadSessionState> {
+  const res = await fetch(`${API_BASE_URL}/api/upload/${encodeURIComponent(uploadId)}/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Validation failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchSessionValidation(uploadId: string): Promise<UploadSessionState> {
+  const res = await fetch(`${API_BASE_URL}/api/upload/${encodeURIComponent(uploadId)}/validation`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Failed to fetch validation: ${res.status}`);
+  return await res.json();
+}
+
+export async function confirmAndImportDataset(
+  uploadId: string,
+  datasetName?: string
+): Promise<ConfirmDatasetResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/upload/${encodeURIComponent(uploadId)}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset_name: datasetName }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to import dataset: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchDatasetsList(): Promise<DatasetListItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/datasets`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to fetch datasets: ${res.status}`);
+  return await res.json();
+}
+
+export async function deleteDataset(datasetId: string): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/datasets/${encodeURIComponent(datasetId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Failed to delete dataset: ${res.status}`);
+  return await res.json();
+}
+

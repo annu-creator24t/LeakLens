@@ -14,6 +14,7 @@ from app.services.query_executor import query_executor, QueryExecutorService
 from app.services.ask_leaklens import ask_service, AskLeakLensService
 from app.services.action_center import action_center_service, ActionCenterService
 from app.services.report_generator import report_generator, ReportGeneratorService
+from app.services.upload_pipeline import upload_pipeline, UploadPipelineService
 
 __all__ = [
     "BaseAIService",
@@ -49,4 +50,6 @@ __all__ = [
     "ActionCenterService",
     "report_generator",
     "ReportGeneratorService",
+    "upload_pipeline",
+    "UploadPipelineService",
 ]

@@ -78,3 +78,32 @@ The LLM must never invent financial facts or calculate monetary ground truth.
                             ▼
                          [OPEN]
 ```
+
+## Real Data Ingestion & Validation Pipeline (Phase 11)
+```
+ Upload Files (Payments, Settlements, Refunds, Fees)
+                    │
+                    ▼
+ File Validation (MIME, Max 25MB, UTF-8/BOM, Malformed Row Checks)
+                    │
+                    ▼
+ Schema Auto-Detection (Heuristic Column Matching + User Override)
+                    │
+                    ▼
+ Data Normalization (Decimal Money, ISO Timestamps, Duplicate IDs)
+                    │
+                    ▼
+ Cross-File Relationship Checks (Preserve Orphans as Warnings)
+                    │
+                    ▼
+ Interactive Preview & User Confirmation
+                    │
+                    ▼
+ Dataset Creation (upload_YYYYMMDD_...)
+                    │
+                    ▼
+ Auto-Triggered Reconciliation & Exception Detection
+                    │
+                    ▼
+ Dashboard & Action Center Live
+```
