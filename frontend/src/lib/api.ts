@@ -409,6 +409,71 @@ export async function fetchTransactionDetail(datasetId: string, paymentId: strin
   return await res.json();
 }
 
+export interface AIInvestigationOutput {
+  summary: string;
+  what_happened: string;
+  why_it_matters: string;
+  possible_causes: string[];
+  recommended_actions: string[];
+  confidence: number;
+  evidence_points: string[];
+  limitations: string[];
+}
+
+export interface InvestigationResponse {
+  success: boolean;
+  exception_id: string;
+  dataset_id: string;
+  cached: boolean;
+  investigation: AIInvestigationOutput;
+  metadata: {
+    investigation_id: string;
+    provider: string;
+    model: string;
+    prompt_version: string;
+    created_at: string;
+    generation_time_ms: number;
+    evidence_hash: string;
+  };
+}
+
+export async function triggerAIInvestigation(
+  datasetId: string,
+  exceptionId: string,
+  forceRefresh: boolean = false
+): Promise<InvestigationResponse> {
+  const url = `${API_BASE_URL}/api/ai/investigate/${encodeURIComponent(datasetId)}/${encodeURIComponent(exceptionId)}${
+    forceRefresh ? "?force_refresh=true" : ""
+  }`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `AI Investigation failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchStoredAIInvestigation(
+  datasetId: string,
+  exceptionId: string
+): Promise<InvestigationResponse | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/ai/investigate/${encodeURIComponent(datasetId)}/${encodeURIComponent(exceptionId)}`,
+    {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    }
+  );
+  if (!res.ok) {
+    return null;
+  }
+  return await res.json();
+}
+
 export function getDownloadUrl(datasetId: string, fileType: string): string {
   return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }

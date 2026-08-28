@@ -209,7 +209,17 @@ cp .env.example .env
 
 ---
 
-## 9. How to Run Locally
+## 9. 🤖 Phase 7: Evidence-Grounded AI Investigator
+LeakLens introduces an auditable, evidence-grounded AI investigator designed specifically to explain financial reconciliation exceptions:
+1. **Core Principle**: The LLM is **NEVER** the source of financial truth. All numbers come strictly from the deterministic reconciliation engine.
+2. **Provider Abstraction**: Pluggable provider architecture (`MockAIService`, `GroqAIService`, `GeminiAIService`) configured via `AI_PROVIDER`.
+3. **Structured Pydantic Output**: Generates validated schemas containing `summary`, `what_happened`, `why_it_matters`, `possible_causes`, `recommended_actions`, `confidence`, and `evidence_points`.
+4. **Deterministic Evidence Hashing**: Every investigation hashes the canonicalized JSON evidence (`SHA-256`) to guarantee deterministic cache reuse and avoid redundant LLM invocations.
+5. **Anti-Hallucination Guardrails**: Prompts and validation strictly forbid inventing transactions, fees, refunds, or claiming automated financial actions were taken.
+
+---
+
+## 10. How to Run Locally
 
 ### Option A: Run Backend & Frontend in Two Terminals
 
@@ -226,7 +236,22 @@ cd frontend
 npm run dev
 ```
 
-Visit **`http://localhost:3000`** in your browser. The live backend badge will show `Operational`.
+Visit **`http://localhost:3000`** in your browser.
+
+---
+
+## 11. 🧪 Verification & Testing
+Run the complete backend test suite:
+```powershell
+cd backend
+.venv\Scripts\pytest tests/ -v
+```
+
+Build the frontend production bundle:
+```powershell
+cd frontend
+npm run build
+```
 
 ---
 

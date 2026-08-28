@@ -10,12 +10,33 @@ The LLM must never invent financial facts or calculate monetary ground truth.
    $$\text{Expected Settlement} = \text{Payment Amount} - \text{Refund Amount} - \text{Fee} - \text{Tax}$$
 3. **Exception Classification**: Identify 7 deterministic exception classes:
    - Missing Settlement
-   - Amount Mismatch
    - Duplicate Settlement
+   - Amount Mismatch
    - Refund Mismatch
-   - Unexpected Fee
+   - Unexpected Fee (Fee Anomaly)
    - Delayed Settlement
    - Orphan Settlement
 4. **Structured Evidence Generation**: Assemble auditable financial proofs for each exception.
-5. **AI Investigator**: Pass structured evidence to an abstracted LLM service to generate root cause, risk analysis, and merchant action items.
-6. **Executive Dashboard & Reporting**: Financial triage queue, discrepancy metrics, and exportable audit reports.
+5. **AI Investigator (Phase 7)**:
+   - Pass structured evidence into provider abstraction (`BaseAIService`).
+   - Validate outputs with Pydantic (`AIInvestigationOutput`).
+   - Enforce deterministic evidence hashing (`SHA-256`) to guarantee cache validity and avoid redundant API costs.
+   - Distinguish confirmed factual evidence from plausible operational hypotheses.
+   - Prescribe safe, reversible next actions for merchant finance controllers.
+6. **Executive Dashboard & Reporting (Phase 6 & 7)**:
+   - Discrepancy KPI hero card, settlement truth cards, and prioritized attention queue.
+   - Detailed exception triage and integrated AI Financial Investigation audit drawer.
+
+## AI Provider Abstraction
+```
+                  ┌──────────────────────┐
+                  │ AIInvestigatorService│
+                  └──────────┬───────────┘
+                             │
+            ┌────────────────┴────────────────┐
+            ▼                                 ▼
+   ┌─────────────────┐               ┌─────────────────┐
+   │  MockAIService  │               │  GroqAIService  │
+   │(Zero-API-Key CI)│               │(Llama 3.3 70B)  │
+   └─────────────────┘               └─────────────────┘
+```

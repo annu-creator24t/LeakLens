@@ -29,6 +29,12 @@ from app.schemas.evaluation import (
     OverallMetrics,
     EvaluationResponse,
 )
+from app.schemas.ai import (
+    AIInvestigationOutput,
+    AIInvestigationRecord,
+    InvestigationRequest,
+    InvestigationResponse,
+)
 
 __all__ = [
     "Payment",
@@ -58,4 +64,8 @@ __all__ = [
     "MetricItem",
     "OverallMetrics",
     "EvaluationResponse",
+    "AIInvestigationOutput",
+    "AIInvestigationRecord",
+    "InvestigationRequest",
+    "InvestigationResponse",
 ]
