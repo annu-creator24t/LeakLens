@@ -57,6 +57,14 @@ from app.schemas.action_center import (
     BulkActionResponse,
     InvestigationHistoryResponse,
 )
+from app.schemas.reports import (
+    ReportFilterParams,
+    ReportMetadata,
+    ReportGenerateRequest,
+    ReportGenerateResponse,
+    ReportPreviewResponse,
+    ReportHistoryListResponse,
+)
 
 __all__ = [
     "Payment",
@@ -108,4 +116,10 @@ __all__ = [
     "BulkActionRequest",
     "BulkActionResponse",
     "InvestigationHistoryResponse",
+    "ReportFilterParams",
+    "ReportMetadata",
+    "ReportGenerateRequest",
+    "ReportGenerateResponse",
+    "ReportPreviewResponse",
+    "ReportHistoryListResponse",
 ]

@@ -790,3 +790,123 @@ export async function executeBulkAction(
 export function getDownloadUrl(datasetId: string, fileType: string): string {
   return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }
+
+export interface ReportPreviewResponse {
+  dataset_id: string;
+  generated_at: string;
+  report_version: string;
+  filters: {
+    severity?: string;
+    exception_type?: string;
+    status?: string;
+    date_preset?: string;
+  };
+  financial_overview: {
+    total_transactions: number;
+    matched_count: number;
+    exception_count: number;
+    total_volume: number;
+    expected_settlement: number;
+    actual_settlement: number;
+    unexplained_difference: number;
+    reconciliation_rate: number;
+  };
+  exception_summary: Record<string, any>;
+  severity_breakdown: Record<string, number>;
+  top_issues: ExceptionItem[];
+  investigation_status: {
+    open: number;
+    investigating: number;
+    resolved: number;
+    ignored: number;
+    total: number;
+    resolution_rate: number;
+    total_unresolved_impact: number;
+  };
+  investigation_activity: Record<string, number>;
+  ai_insights: Array<{
+    exception_id: string;
+    payment_id?: string;
+    exception_type?: string;
+    summary: string;
+    possible_causes: string[];
+    recommended_actions: string[];
+    confidence: number;
+  }>;
+  methodology: string;
+}
+
+export interface ReportMetadata {
+  report_id: string;
+  dataset_id: string;
+  report_title: string;
+  report_type: string;
+  report_version: string;
+  filters: Record<string, any>;
+  created_at: string;
+  generation_time_ms: number;
+  download_url: string;
+}
+
+export interface ReportGenerateResponse {
+  success: boolean;
+  report_id: string;
+  download_url: string;
+  generation_time_ms: number;
+  metadata: ReportMetadata;
+}
+
+export async function fetchReportPreview(
+  datasetId: string,
+  params: {
+    severity?: string;
+    exception_type?: string;
+    status?: string;
+    date_preset?: string;
+  } = {}
+): Promise<ReportPreviewResponse> {
+  const query = new URLSearchParams();
+  if (params.severity && params.severity !== "ALL") query.set("severity", params.severity);
+  if (params.exception_type && params.exception_type !== "ALL") query.set("exception_type", params.exception_type);
+  if (params.status && params.status !== "ALL") query.set("status_filter", params.status);
+  if (params.date_preset) query.set("date_preset", params.date_preset);
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/reports/${encodeURIComponent(datasetId)}/preview?${query.toString()}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch report preview: ${res.status}`);
+  return await res.json();
+}
+
+export async function generateReportPdf(
+  datasetId: string,
+  filters: Record<string, any> = {}
+): Promise<ReportGenerateResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/reports/${encodeURIComponent(datasetId)}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ format: "pdf", filters }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to generate PDF: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchReportHistory(datasetId: string): Promise<{ dataset_id: string; reports: ReportMetadata[] }> {
+  const res = await fetch(`${API_BASE_URL}/api/reports/${encodeURIComponent(datasetId)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Failed to fetch report history: ${res.status}`);
+  return await res.json();
+}
+
+export function getReportDownloadUrl(datasetId: string, reportId: string): string {
+  return `${API_BASE_URL}/api/reports/${encodeURIComponent(datasetId)}/${encodeURIComponent(reportId)}/download`;
+}
+
+export function getCsvExportUrl(datasetId: string, tableType: string): string {
+  return `${API_BASE_URL}/api/exports/${encodeURIComponent(datasetId)}/${encodeURIComponent(tableType)}.csv`;
+}
