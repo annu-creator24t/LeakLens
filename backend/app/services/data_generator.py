@@ -258,5 +258,25 @@ class DataGeneratorService:
             return folder
         return None
 
+    def list_generated_datasets(self) -> Dict[str, Dict[str, Any]]:
+        """Scans disk & cache for existing generated benchmarks."""
+        datasets = {}
+        for ds_id, data in self._cache.items():
+            meta = data.get("metadata")
+            datasets[ds_id] = meta.model_dump() if hasattr(meta, "model_dump") else meta
+
+        if os.path.exists(self.generated_dir):
+            for entry in os.listdir(self.generated_dir):
+                folder = os.path.join(self.generated_dir, entry)
+                if os.path.isdir(folder) and entry not in datasets:
+                    meta_path = os.path.join(folder, "metadata.json")
+                    if os.path.exists(meta_path):
+                        try:
+                            with open(meta_path, "r", encoding="utf-8") as f:
+                                datasets[entry] = json.load(f)
+                        except Exception:
+                            pass
+        return datasets
+
 
 data_generator = DataGeneratorService()

@@ -258,6 +258,157 @@ export async function runEvaluation(datasetId: string): Promise<EvaluationRespon
   return await res.json();
 }
 
+export interface DatasetItem {
+  dataset_id: string;
+  name: string;
+  transaction_count: number;
+  created_at: string;
+  type: "BENCHMARK" | "UPLOADED";
+}
+
+export interface TransactionItem {
+  payment_id: string;
+  order_id: string;
+  merchant_id: string;
+  amount: number;
+  currency: string;
+  payment_status: string;
+  payment_method: string;
+  created_at: string;
+  refund_amount: number;
+  fee_amount: number;
+  expected_settlement: number;
+  actual_settlement: number;
+  difference: number;
+  status: string;
+  has_exception: boolean;
+  exception_id?: string;
+}
+
+export interface TransactionsResponse {
+  dataset_id: string;
+  total: number;
+  page: number;
+  limit: number;
+  items: TransactionItem[];
+}
+
+export interface TransactionDetail {
+  payment: Record<string, any>;
+  settlements: Array<Record<string, any>>;
+  refunds: Array<Record<string, any>>;
+  fee: Record<string, any>;
+  calculation: {
+    payment_amount: number;
+    refund_deduction: number;
+    fee_deduction: number;
+    tax_deduction: number;
+    expected_settlement: number;
+    actual_settlement: number;
+    difference: number;
+  };
+  status: string;
+  exception?: ExceptionItem;
+  timeline: Array<{
+    event: string;
+    timestamp: string;
+    details: string;
+  }>;
+}
+
+export interface ExceptionSummaryResponse {
+  dataset_id: string;
+  total_exceptions: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  missing_settlement_count: number;
+  duplicate_settlement_count: number;
+  amount_mismatch_count: number;
+  refund_mismatch_count: number;
+  fee_anomaly_count: number;
+  delayed_settlement_count: number;
+  orphan_settlement_count: number;
+  total_financial_impact: number;
+  missing_settlement_impact: number;
+  duplicate_settlement_impact: number;
+  amount_mismatch_impact: number;
+  refund_mismatch_impact: number;
+  fee_anomaly_impact: number;
+  delayed_settlement_impact: number;
+  orphan_settlement_impact: number;
+}
+
+export async function fetchAvailableDatasets(): Promise<{ datasets: DatasetItem[] }> {
+  const res = await fetch(`${API_BASE_URL}/api/datasets`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return { datasets: [] };
+  }
+  return await res.json();
+}
+
+export async function fetchExceptionSummary(datasetId: string): Promise<ExceptionSummaryResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/exceptions/${encodeURIComponent(datasetId)}/summary`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch exception summary: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function updateExceptionStatus(datasetId: string, exceptionId: string, status: string): Promise<{ success: boolean; status: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/exceptions/${encodeURIComponent(datasetId)}/${encodeURIComponent(exceptionId)}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update status: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchTransactions(
+  datasetId: string,
+  params?: { status?: string; search?: string; page?: number; limit?: number }
+): Promise<TransactionsResponse> {
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== "ALL") query.append("status", params.status);
+  if (params?.search) query.append("search", params.search);
+  if (params?.page) query.append("page", String(params.page));
+  if (params?.limit) query.append("limit", String(params.limit));
+
+  const res = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(datasetId)}?${query.toString()}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch transactions: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchTransactionDetail(datasetId: string, paymentId: string): Promise<TransactionDetail> {
+  const res = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(datasetId)}/${encodeURIComponent(paymentId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch transaction detail: ${res.status}`);
+  }
+  return await res.json();
+}
+
 export function getDownloadUrl(datasetId: string, fileType: string): string {
   return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }
