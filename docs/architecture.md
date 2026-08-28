@@ -32,6 +32,14 @@ The LLM must never invent financial facts or calculate monetary ground truth.
    - Discrepancy KPI hero card, settlement truth cards, and prioritized attention queue.
    - Detailed exception triage and integrated AI Financial Investigation audit drawer.
 
+8. **Investigation & Action Center (Phase 9)**:
+   - Operational triage and lifecycle management on `/action-center`.
+   - Validated status transitions (`OPEN` $\rightarrow$ `INVESTIGATING` $\rightarrow$ `RESOLVED` / `IGNORED`).
+   - Deterministic prioritization: Severity (`CRITICAL` > `HIGH` > `MEDIUM` > `LOW`) $\rightarrow$ Financial Impact $\rightarrow$ Age.
+   - Merchant investigation notes and unified audit timeline.
+   - Bulk action execution with atomic safety and failure isolation.
+   - Strictly non-autonomous: zero automatic money movement or fund modifications.
+
 ## Ask LeakLens Architecture
 ```
   User Question
@@ -55,4 +63,18 @@ The LLM must never invent financial facts or calculate monetary ground truth.
  ┌─────────────────────┐
  │ Structured Answer   ├── (Summary, Key Findings, Clickable Evidence Chips)
  └─────────────────────┘
+```
+
+## Investigation Lifecycle State Machine
+```
+       [OPEN] ─── (Start Investigation) ───► [INVESTIGATING]
+         │                                         │
+         │ (Ignore with Reason)                    │ (Resolve with Note)
+         ▼                                         ▼
+     [IGNORED]                                [RESOLVED]
+         │                                         │
+         └───────────── (Reopen) ──────────────────┘
+                            │
+                            ▼
+                         [OPEN]
 ```

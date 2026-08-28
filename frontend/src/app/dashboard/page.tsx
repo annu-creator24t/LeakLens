@@ -25,11 +25,13 @@ import {
   runReconciliation,
   fetchReconciliationSummary,
   fetchExceptionSummary,
-  fetchReconciliationExceptions,
+  fetchPriorityQueue,
+  fetchActionCenterSummary,
   generateSyntheticDataset,
   ReconcileResponse,
   ExceptionSummaryResponse,
-  ExceptionItem
+  ExceptionItem,
+  ActionCenterSummary
 } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
 
@@ -57,6 +59,7 @@ function DashboardContent() {
 
   const [summary, setSummary] = useState<ReconcileResponse | null>(null);
   const [excSummary, setExcSummary] = useState<ExceptionSummaryResponse | null>(null);
+  const [actionSummary, setActionSummary] = useState<ActionCenterSummary | null>(null);
   const [topExceptions, setTopExceptions] = useState<ExceptionItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,22 +88,20 @@ function DashboardContent() {
         const eSummary = await fetchExceptionSummary(id);
         setExcSummary(eSummary);
       } catch {
-        // Exception detector will populate via reconciliation
+        // Handled
       }
 
-      // 3. Fetch Top Attention Exceptions (Critical/High sorted by impact)
-      const topExc = await fetchReconciliationExceptions(id, {
-        limit: 5,
-        severity: "ALL",
-      });
-      // Sort in memory by severity & financial impact
-      const sorted = [...topExc.items].sort((a, b) => {
-        const sevScore = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
-        const diffSev = (sevScore[b.severity] || 0) - (sevScore[a.severity] || 0);
-        if (diffSev !== 0) return diffSev;
-        return b.amount_discrepancy - a.amount_discrepancy;
-      });
-      setTopExceptions(sorted.slice(0, 5));
+      // 3. Fetch Action Center Summary & Prioritized Issues
+      try {
+        const [actSum, prioQueue] = await Promise.all([
+          fetchActionCenterSummary(id),
+          fetchPriorityQueue(id, { limit: 5 }),
+        ]);
+        setActionSummary(actSum);
+        setTopExceptions(prioQueue.items);
+      } catch {
+        // Handled
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard metrics.");
     } finally {
@@ -384,7 +385,7 @@ function DashboardContent() {
 
           {/* Priority Attention Section: "What needs my attention?" */}
           <div className="p-6 rounded-xl bg-[#0c121e] border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
               <div>
                 <h2 className="text-base font-semibold text-white tracking-tight flex items-center space-x-2">
                   <ShieldAlert className="w-4 h-4 text-rose-400" />
@@ -394,13 +395,27 @@ function DashboardContent() {
                   High-priority financial anomalies sorted by deterministic severity and monetary impact.
                 </p>
               </div>
-              <Link
-                href={`/exceptions?dataset_id=${datasetId}&severity=CRITICAL`}
-                className="text-xs text-rose-400 hover:text-rose-300 flex items-center space-x-1 font-mono"
-              >
-                <span>Filter Critical Exceptions</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+
+              <div className="flex items-center space-x-3">
+                {actionSummary && (
+                  <div className="flex items-center space-x-1 text-[11px] font-mono">
+                    <span className="px-2 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-400 font-semibold">
+                      {actionSummary.open} Open
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/60 text-amber-400 font-semibold">
+                      {actionSummary.investigating} In Review
+                    </span>
+                  </div>
+                )}
+
+                <Link
+                  href={`/action-center?dataset_id=${datasetId}`}
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1 font-semibold"
+                >
+                  <span>Open Action Center</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
 
             {topExceptions.length === 0 ? (

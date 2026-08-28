@@ -571,6 +571,222 @@ export async function fetchAskSuggestions(datasetId: string): Promise<string[]> 
   }
 }
 
+export interface ActionCenterSummary {
+  open: number;
+  investigating: number;
+  resolved: number;
+  ignored: number;
+  total: number;
+  total_unresolved_impact: number;
+}
+
+export interface InvestigationNote {
+  note_id: string;
+  dataset_id: string;
+  exception_id: string;
+  note: string;
+  actor: string;
+  created_at: string;
+}
+
+export interface InvestigationAuditEvent {
+  audit_id: string;
+  dataset_id: string;
+  exception_id: string;
+  action: string;
+  previous_status: string;
+  new_status: string;
+  note?: string;
+  actor: string;
+  created_at: string;
+}
+
+export interface InvestigationHistoryResponse {
+  exception_id: string;
+  dataset_id: string;
+  current_status: string;
+  notes: InvestigationNote[];
+  audit_events: InvestigationAuditEvent[];
+}
+
+export interface BulkActionResponse {
+  success: boolean;
+  total_requested: number;
+  updated_count: number;
+  skipped_count: number;
+  updated_ids: string[];
+  skipped_reasons: Record<string, string>;
+}
+
+export async function fetchActionCenterSummary(datasetId: string): Promise<ActionCenterSummary> {
+  const res = await fetch(`${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/summary`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Failed to fetch Action Center summary: ${res.status}`);
+  return await res.json();
+}
+
+export async function fetchPriorityQueue(
+  datasetId: string,
+  params: {
+    status?: string;
+    severity?: string;
+    exception_type?: string;
+    min_impact?: number;
+    max_impact?: number;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {}
+): Promise<{ dataset_id: string; total: number; page: number; limit: number; items: ExceptionItem[] }> {
+  const query = new URLSearchParams();
+  if (params.status) query.set("status_filter", params.status);
+  if (params.severity && params.severity !== "ALL") query.set("severity", params.severity);
+  if (params.exception_type && params.exception_type !== "ALL") query.set("exception_type", params.exception_type);
+  if (params.min_impact !== undefined) query.set("min_impact", String(params.min_impact));
+  if (params.max_impact !== undefined) query.set("max_impact", String(params.max_impact));
+  if (params.search) query.set("search", params.search);
+  if (params.page) query.set("page", String(params.page));
+  if (params.limit) query.set("limit", String(params.limit));
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/priority?${query.toString()}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch priority queue: ${res.status}`);
+  return await res.json();
+}
+
+export async function startInvestigation(
+  datasetId: string,
+  exceptionId: string,
+  note?: string
+): Promise<any> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}/start`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: note || "Started investigation from UI." }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to start investigation: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function addInvestigationNote(
+  datasetId: string,
+  exceptionId: string,
+  note: string
+): Promise<{ success: boolean; note: InvestigationNote }> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}/note`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to save note: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function resolveException(
+  datasetId: string,
+  exceptionId: string,
+  note: string
+): Promise<any> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}/resolve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to resolve exception: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function ignoreException(
+  datasetId: string,
+  exceptionId: string,
+  note: string
+): Promise<any> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}/ignore`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to ignore exception: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function reopenException(
+  datasetId: string,
+  exceptionId: string,
+  note?: string
+): Promise<any> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}/reopen`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: note || "Reopened exception." }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to reopen exception: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function fetchInvestigationHistory(
+  datasetId: string,
+  exceptionId: string
+): Promise<InvestigationHistoryResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}/history`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch investigation history: ${res.status}`);
+  return await res.json();
+}
+
+export async function executeBulkAction(
+  datasetId: string,
+  exceptionIds: string[],
+  action: "START" | "IGNORE",
+  note?: string
+): Promise<BulkActionResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/action-center/${encodeURIComponent(datasetId)}/bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ exception_ids: exceptionIds, action, note }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Bulk action failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
 export function getDownloadUrl(datasetId: string, fileType: string): string {
   return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }

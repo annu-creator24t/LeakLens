@@ -231,7 +231,19 @@ Ask LeakLens provides a plain-language financial investigation assistant on `/in
 
 ---
 
-## 11. How to Run Locally
+## 11. 🛡️ Phase 9: Investigation & Action Center
+LeakLens transforms from a pure anomaly detection engine into a full-cycle merchant investigation management system on `/action-center`:
+1. **Status State Machine**: Enforces verified lifecycle transitions (`OPEN` $\rightarrow$ `INVESTIGATING` $\rightarrow$ `RESOLVED` / `IGNORED`, and reopening).
+2. **Deterministic Priority Triage**: Rank-orders exceptions strictly by:
+   - Severity Priority (`CRITICAL` > `HIGH` > `MEDIUM` > `LOW`)
+   - Discrepancy Amount (monetary impact magnitude)
+   - Age / Timestamp
+3. **Interactive Investigation Notes**: Records merchant findings, provider communications, and verification notes without altering underlying financial truth records.
+4. **Unified Audit Trail**: Chronologically logs all detection events, status transitions, notes, and user actions.
+5. **Bulk Action Safety**: Supports bulk investigation starts and batch ignore operations with per-item validation and failure isolation.
+6. **Zero Autonomous Money Movement**: Strictly prohibits automatic refunding, bank payouts, or balance manipulations. Human decides.
+
+---
 
 ### Option A: Run Backend & Frontend in Two Terminals
 

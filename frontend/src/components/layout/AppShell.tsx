@@ -22,11 +22,12 @@ import { fetchAvailableDatasets, generateSyntheticDataset, DatasetItem } from "@
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/action-center", label: "Action Center", icon: ShieldCheck },
   { href: "/investigate", label: "Ask LeakLens", icon: Sparkles },
   { href: "/exceptions", label: "Exceptions", icon: AlertTriangle },
   { href: "/transactions", label: "Transactions", icon: Receipt },
   { href: "/generator", label: "Benchmark Generator", icon: Cpu },
-  { href: "/evaluation", label: "Evaluator Bench", icon: ShieldCheck },
+  { href: "/evaluation", label: "Evaluator Bench", icon: Activity },
   { href: "/upload", label: "Data Ingestion", icon: FileSpreadsheet },
 ];
 

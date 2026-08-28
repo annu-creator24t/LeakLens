@@ -12,6 +12,7 @@ from app.services.ai_investigator import ai_investigator, AIInvestigatorService
 from app.services.query_planner import query_planner, QueryPlannerService
 from app.services.query_executor import query_executor, QueryExecutorService
 from app.services.ask_leaklens import ask_service, AskLeakLensService
+from app.services.action_center import action_center_service, ActionCenterService
 
 __all__ = [
     "BaseAIService",
@@ -43,4 +44,6 @@ __all__ = [
     "QueryExecutorService",
     "ask_service",
     "AskLeakLensService",
+    "action_center_service",
+    "ActionCenterService",
 ]
