@@ -72,16 +72,47 @@ export async function uploadFinancialFile(
   return await res.json();
 }
 
-export async function fetchDatasetStatus(datasetId: string): Promise<DatasetUploadStatus> {
-  const res = await fetch(`${API_BASE_URL}/api/upload/status?dataset_id=${encodeURIComponent(datasetId)}`, {
-    method: "GET",
+export interface GeneratorConfig {
+  transaction_count: number;
+  anomaly_rate: number;
+  seed: number;
+  merchant_id?: string;
+  anomalies: {
+    missing_settlement: boolean;
+    duplicate_settlement: boolean;
+    amount_mismatch: boolean;
+    refund_mismatch: boolean;
+    fee_anomaly: boolean;
+    delayed_settlement: boolean;
+    orphan_settlement: boolean;
+  };
+}
+
+export interface GeneratorResponse {
+  success: boolean;
+  dataset_id: string;
+  transaction_count: number;
+  anomaly_count: number;
+  generation_time_ms: number;
+  anomaly_breakdown: Record<string, number>;
+  files_available: string[];
+}
+
+export async function generateSyntheticDataset(config: GeneratorConfig): Promise<GeneratorResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/generator/generate`, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    cache: "no-store",
+    body: JSON.stringify(config),
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to fetch dataset status: ${res.status}`);
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Generation failed with status ${res.status}`);
   }
 
   return await res.json();
+}
+
+export function getDownloadUrl(datasetId: string, fileType: string): string {
+  return `${API_BASE_URL}/api/generator/${datasetId}/download/${fileType}`;
 }

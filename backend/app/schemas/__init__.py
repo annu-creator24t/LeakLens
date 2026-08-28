@@ -12,6 +12,12 @@ from app.schemas.financial import (
     ReconciliationException,
     ReconciliationSummary,
 )
+from app.schemas.generator import (
+    GeneratorConfig,
+    AnomalyConfig,
+    GeneratorResponse,
+    DatasetMetadata,
+)
 
 __all__ = [
     "Payment",
@@ -26,4 +32,8 @@ __all__ = [
     "AIInvestigationResult",
     "ReconciliationException",
     "ReconciliationSummary",
+    "GeneratorConfig",
+    "AnomalyConfig",
+    "GeneratorResponse",
+    "DatasetMetadata",
 ]

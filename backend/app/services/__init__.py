@@ -3,6 +3,8 @@ from app.services.csv_parser import csv_parser, CSVParserService
 from app.services.csv_validator import csv_validator, CSVValidatorService
 from app.services.data_normalizer import data_normalizer, DataNormalizerService
 from app.services.dataset_service import dataset_service, DatasetService
+from app.services.anomaly_injector import anomaly_injector, AnomalyInjectorService
+from app.services.data_generator import data_generator, DataGeneratorService
 
 __all__ = [
     "BaseAIService",
@@ -16,4 +18,8 @@ __all__ = [
     "DataNormalizerService",
     "dataset_service",
     "DatasetService",
+    "anomaly_injector",
+    "AnomalyInjectorService",
+    "data_generator",
+    "DataGeneratorService",
 ]

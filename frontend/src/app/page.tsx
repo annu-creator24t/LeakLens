@@ -39,6 +39,13 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center space-x-4">
+            <Link
+              href="/generator"
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors border border-blue-900/50 px-3 py-1.5 rounded-lg bg-blue-950/40"
+            >
+              Benchmark Generator
+            </Link>
+
             {/* Backend Health Badge */}
             <div className="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800">
               <span className={`w-2 h-2 rounded-full ${backendHealth?.status === "ok" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
