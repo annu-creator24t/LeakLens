@@ -179,46 +179,94 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ---
 
+---
+
 ## 10. Environment Variables (`.env.example`)
 
 ```env
-# Application
+# Application Mode
 ENVIRONMENT=development
 LOG_LEVEL=info
 
-# Server
-BACKEND_HOST=127.0.0.1
+# Backend Server (Render dynamic PORT supported)
+BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8000
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
-# Database (Optional - in-memory fallback active if left empty)
-MONGODB_URI=mongodb://localhost:27017
+# Database (MongoDB Atlas / In-Memory Fallback)
+MONGODB_URI=
 MONGODB_DB_NAME=leaklens
 
-# Security
+# Security / Authentication
 JWT_SECRET=dev-secret-key-change-in-production-32bytesmin
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
-# AI Provider (mock, gemini, openai, groq)
+# AI Provider Configuration (mock, gemini, openai, groq)
 AI_PROVIDER=mock
 AI_API_KEY=
 AI_MODEL_NAME=gemini-1.5-flash
 
-# Frontend
+# Frontend API Target (Vercel)
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ---
 
-## 11. Known Limitations
+## 11. Deployment
+
+LeakLens is architected for clean cloud deployment across standard platforms:
+
+### 1. Database → MongoDB Atlas
+1. Create a free-tier cluster on **[MongoDB Atlas](https://www.mongodb.com/atlas)**.
+2. Under **Database Access**, create a database user and password.
+3. Under **Network Access**, add `0.0.0.0/0` (allow access from cloud providers).
+4. Copy the connection string format:
+   ```text
+   mongodb+srv://<username>:<password>@cluster0.mongodb.net/?retryWrites=true&w=majority
+   ```
+*(Note: If `MONGODB_URI` is omitted, the backend automatically operates in in-memory mode for zero-configuration testing).*
+
+---
+
+### 2. Backend API → Render
+1. Create a new **Web Service** on **[Render](https://render.com)** pointing to your repository.
+2. Set configuration:
+   - **Root Directory**: `backend`
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. Add Environment Variables in Render Dashboard:
+   - `ENVIRONMENT`: `production`
+   - `LOG_LEVEL`: `info`
+   - `MONGODB_URI`: `<your-mongodb-atlas-connection-string>`
+   - `MONGODB_DB_NAME`: `leaklens`
+   - `ALLOWED_ORIGINS`: `https://<your-vercel-app-url>.vercel.app`
+   - `AI_PROVIDER`: `mock` *(or `gemini`, `openai`, `groq` with `AI_API_KEY`)*
+   - `JWT_SECRET`: `<generated-32-char-random-secret>`
+4. Copy your deployed backend service URL (e.g., `https://leaklens-api.onrender.com`).
+
+---
+
+### 3. Frontend UI → Vercel
+1. Import the repository into **[Vercel](https://vercel.com)**.
+2. Set **Root Directory**: `frontend`
+3. Framework Preset: **Next.js**
+4. Add Environment Variable:
+   - `NEXT_PUBLIC_API_URL`: `https://leaklens-api.onrender.com` *(your deployed Render backend URL)*
+5. Click **Deploy**.
+6. Once deployed, copy your production Vercel URL and update `ALLOWED_ORIGINS` on Render if needed.
+
+---
+
+## 12. Known Limitations
 - **CSV-First Ingestion**: Currently ingests structured CSV files; direct payment gateway webhook streaming is slated for future phases.
 - **Currency Standard**: Built primarily for INR (`₹`) reconciliation; multi-currency FX conversion matrices are not yet automated.
 - **LLM Rate-Limits**: In cloud provider modes, investigations depend on provider quota thresholds; Mock mode provides zero-latency deterministic offline operation.
 
 ---
 
-## 12. Future Roadmap
+## 13. Future Roadmap
 1. **Direct Gateway Connectors**: Automated sync adapters for payment gateways and core banking APIs.
 2. **Multi-Currency Support**: Real-time FX rate settlement conversion matrices.
 3. **Scheduled Automated Auditing**: Cron-driven nightly settlement reconciliation jobs.
@@ -226,5 +274,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
-## 13. License
+## 14. License
 Built with ❤️ for the **Razorpay AI Buildathon 2026**.
+

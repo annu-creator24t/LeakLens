@@ -14,14 +14,28 @@ class DatabaseManager:
     async def connect(self):
         """Initializes database connection if MONGODB_URI is provided."""
         if not settings.MONGODB_URI:
-            logger.info("No MONGODB_URI provided. Running backend in stateless/in-memory mode for local development.")
+            if settings.ENVIRONMENT.lower() == "production":
+                logger.warning(
+                    "No MONGODB_URI provided in production environment. Backend running in in-memory fallback mode. "
+                    "For persistent cloud storage, configure MONGODB_URI (e.g. MongoDB Atlas connection string)."
+                )
+            else:
+                logger.info("No MONGODB_URI provided. Running backend in stateless/in-memory mode for local development.")
             return
 
         try:
-            logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
+            # Mask credentials in logs for security
+            masked_uri = settings.MONGODB_URI
+            if "@" in masked_uri:
+                prefix = masked_uri.split("@")[0]
+                suffix = masked_uri.split("@")[1]
+                scheme = prefix.split("://")[0] if "://" in prefix else "mongodb"
+                masked_uri = f"{scheme}://****:****@{suffix}"
+            
+            logger.info(f"Connecting to MongoDB at {masked_uri}...")
             self.client = AsyncIOMotorClient(
                 settings.MONGODB_URI,
-                serverSelectionTimeoutMS=2000
+                serverSelectionTimeoutMS=5000
             )
             # Ping database to confirm connection
             await self.client.admin.command('ping')
@@ -29,7 +43,10 @@ class DatabaseManager:
             self.is_connected = True
             logger.info(f"Connected to MongoDB database: '{settings.MONGODB_DB_NAME}'")
         except Exception as e:
-            logger.warning(f"MongoDB connection failed: {e}. Falling back to stateless local mode.")
+            if settings.ENVIRONMENT.lower() == "production":
+                logger.error(f"MongoDB connection failed in production: {e}. Active fallback: in-memory state.")
+            else:
+                logger.warning(f"MongoDB connection failed: {e}. Falling back to stateless local mode.")
             self.is_connected = False
             self.db = None
 
