@@ -8,17 +8,16 @@ import {
   Activity,
   CheckCircle2,
   AlertTriangle,
-  Layers,
   ArrowRight,
   RefreshCw,
   Search,
-  DollarSign,
-  PieChart,
-  BarChart3,
-  ShieldAlert,
-  ArrowUpRight,
   Database,
-  FileSpreadsheet
+  FileSpreadsheet,
+  HelpCircle,
+  Clock,
+  Sparkles,
+  ShieldCheck,
+  Receipt
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -33,23 +32,20 @@ import {
   ExceptionItem,
   ActionCenterSummary
 } from "@/lib/api";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatters";
+import { FinancialAmount } from "@/components/ui/FinancialAmount";
+import { SeverityBadge, StatusBadge } from "@/components/ui/Badges";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
+import { formatDate, formatNumber } from "@/lib/formatters";
 
 const EXCEPTION_TITLES: Record<string, string> = {
   MISSING_SETTLEMENT: "Missing Settlement",
   DUPLICATE_SETTLEMENT: "Duplicate Settlement",
   AMOUNT_MISMATCH: "Amount Mismatch",
   REFUND_MISMATCH: "Refund Mismatch",
-  FEE_ANOMALY: "Fee Anomaly",
-  DELAYED_SETTLEMENT: "Delayed Settlement",
+  FEE_ANOMALY: "Fee Anomaly (Excess MDR)",
+  DELAYED_SETTLEMENT: "Delayed Settlement (SLA Breach)",
   ORPHAN_SETTLEMENT: "Orphan Settlement",
-};
-
-const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  CRITICAL: { bg: "bg-rose-950/60", text: "text-rose-400", border: "border-rose-800/60" },
-  HIGH: { bg: "bg-amber-950/60", text: "text-amber-400", border: "border-amber-800/60" },
-  MEDIUM: { bg: "bg-blue-950/60", text: "text-blue-400", border: "border-blue-800/60" },
-  LOW: { bg: "bg-slate-800", text: "text-slate-400", border: "border-slate-700" },
 };
 
 function DashboardContent() {
@@ -74,7 +70,7 @@ function DashboardContent() {
     setLoading(true);
     setError(null);
     try {
-      // 1. Run / Fetch reconciliation summary
+      // 1. Run or fetch reconciliation summary
       let recSummary: ReconcileResponse;
       try {
         recSummary = await fetchReconciliationSummary(id);
@@ -95,7 +91,7 @@ function DashboardContent() {
       try {
         const [actSum, prioQueue] = await Promise.all([
           fetchActionCenterSummary(id),
-          fetchPriorityQueue(id, { limit: 5 }),
+          fetchPriorityQueue(id, { limit: 6 }),
         ]);
         setActionSummary(actSum);
         setTopExceptions(prioQueue.items);
@@ -103,7 +99,7 @@ function DashboardContent() {
         // Handled
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard metrics.");
+      setError(err instanceof Error ? err.message : "Something went wrong while loading this financial dataset.");
     } finally {
       setLoading(false);
     }
@@ -126,7 +122,7 @@ function DashboardContent() {
           fee_anomaly: true,
           delayed_settlement: true,
           orphan_settlement: true,
-        }
+        },
       });
       router.push(`/dashboard?dataset_id=${gen.dataset_id}`);
     } catch (err) {
@@ -137,32 +133,50 @@ function DashboardContent() {
 
   if (!datasetId && !loading) {
     return (
-      <div className="p-12 rounded-xl border border-dashed border-slate-800 bg-[#0c121e]/40 flex flex-col items-center justify-center text-center space-y-4">
-        <Database className="w-12 h-12 text-slate-600" />
-        <h2 className="text-base font-semibold text-slate-200">No Financial Dataset Selected</h2>
-        <p className="text-xs text-slate-400 max-w-md">
-          Select an active session from the header dropdown, load the official 10,000-record benchmark, or upload CSV files.
-        </p>
-        <div className="flex gap-3 pt-2">
-          <Link
-            href="/upload"
-            className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-blue-400" />
-            <span>Upload CSV Dataset</span>
-          </Link>
-          <button
-            type="button"
-            onClick={() => handleCreateDemo(10000)}
-            className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center space-x-2 cursor-pointer"
-          >
-            <Activity className="w-4 h-4" />
-            <span>Load 10k Benchmark Demo</span>
-          </button>
-        </div>
-      </div>
+      <EmptyState
+        icon={Database}
+        title="No Financial Dataset Selected"
+        description="Select an active financial session from the header, load the pre-generated 10,000-record benchmark, or upload CSV files."
+        action={
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => handleCreateDemo(10000)}
+              className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
+            >
+              <Activity className="w-4 h-4" />
+              <span>Load 10k Benchmark Demo</span>
+            </button>
+            <Link
+              href="/upload"
+              className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+              <span>Upload CSV Dataset</span>
+            </Link>
+          </div>
+        }
+      />
     );
   }
+
+  if (loading && !summary) {
+    return (
+      <LoadingState
+        message="Loading financial overview..."
+        subMessage="Reconciling captured payments against settled payouts"
+        size="lg"
+      />
+    );
+  }
+
+  // Calculated Reconciled vs Unreconciled percentages directly from deterministic backend values
+  const recRate = summary?.reconciliation_rate ?? 0;
+  const unrecRate = Math.max(0, 100 - recRate);
+  const unexplainedAmount = summary?.unexplained_difference ?? 0;
+  const openCount = actionSummary?.open ?? (summary?.exception_count ?? 0);
+  const investigatingCount = actionSummary?.investigating ?? 0;
+  const resolvedCount = actionSummary?.resolved ?? 0;
 
   return (
     <div className="space-y-8">
@@ -170,9 +184,11 @@ function DashboardContent() {
       {/* Header Info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Merchant Settlement Overview</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            Financial Health & Reconciliation
+          </h1>
           <p className="text-slate-400 text-xs mt-0.5">
-            Deterministic reconciliation analysis across payment captures, gateway fees, partial refunds, and bank payouts.
+            Deterministic matching across payment captures, deductions, refunds, and bank settlements.
           </p>
         </div>
 
@@ -183,297 +199,254 @@ function DashboardContent() {
           className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2 transition-colors cursor-pointer self-start"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-400" : ""}`} />
-          <span>Refresh Analysis</span>
+          <span>Refresh Overview</span>
         </button>
       </div>
 
-      {/* Error Banner */}
+      {/* Error State Banner */}
       {error && (
-        <div className="p-4 rounded-lg bg-rose-950/40 border border-rose-900 text-xs text-rose-300 flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
+        <ErrorState
+          message={error}
+          onRetry={() => datasetId && loadDashboardData(datasetId)}
+        />
       )}
 
-      {/* Loading Skeleton */}
-      {loading && (
-        <div className="p-16 rounded-xl border border-slate-800 bg-[#0c121e] flex flex-col items-center justify-center text-center space-y-3">
-          <RefreshCw className="w-8 h-8 text-blue-400 animate-spin" />
-          <p className="text-sm font-semibold text-white">Aggregating Financial Intelligence...</p>
-          <p className="text-xs text-slate-500 font-mono">Running deterministic verification across transactions and exceptions</p>
-        </div>
-      )}
-
-      {/* Overview Cards */}
-      {!loading && summary && (
-        <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Card 1: Most Important Metric — Potential Discrepancy */}
-            <div className="p-5 rounded-xl bg-gradient-to-b from-rose-950/30 to-slate-950 border border-rose-900/50 flex flex-col justify-between space-y-3 shadow-lg relative overflow-hidden">
-              <div className="flex items-center justify-between text-xs text-rose-400 font-medium">
-                <span className="flex items-center space-x-1.5">
-                  <TrendingDown className="w-4 h-4" />
-                  <span>Potential Discrepancy</span>
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-rose-950 border border-rose-800 text-rose-300 font-mono">
-                  {summary.exception_count} Exceptions
-                </span>
-              </div>
-              <div>
-                <div className="text-3xl font-bold font-mono text-white tracking-tight">
-                  {formatCurrency(summary.unexplained_difference)}
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Settlement variance requiring merchant investigation
-                </p>
-              </div>
-              <div className="pt-2 border-t border-rose-950/60 flex items-center justify-between text-[11px]">
-                <Link
-                  href={`/exceptions?dataset_id=${datasetId}&severity=CRITICAL`}
-                  className="text-rose-400 hover:text-rose-300 font-medium flex items-center space-x-1"
-                >
-                  <span>Inspect Critical Issues</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
+      {/* 1. HERO DASHBOARD SECTION: "How much money is unexplained?" */}
+      <div className="grid lg:grid-cols-12 gap-6 items-stretch">
+        
+        {/* Main Hero Card */}
+        <div className="lg:col-span-7 p-6 rounded-xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
+                FINANCIAL HEALTH
+              </span>
             </div>
-
-            {/* Card 2: Total Payment Volume */}
-            <div className="p-5 rounded-xl bg-[#0c121e] border border-slate-800 flex flex-col justify-between space-y-3">
-              <span className="text-xs text-slate-400 font-medium">Total Processed Volume</span>
-              <div>
-                <div className="text-2xl font-bold font-mono text-slate-100">
-                  {formatCurrency(summary.total_volume)}
-                </div>
-                <p className="text-[11px] text-slate-500 font-mono mt-1">
-                  {formatNumber(summary.total_transactions)} Total Transactions
-                </p>
-              </div>
-              <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
-                <Link href={`/transactions?dataset_id=${datasetId}`} className="text-blue-400 hover:text-blue-300 flex items-center space-x-1">
-                  <span>View All Transactions</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Card 3: Reconciliation Health Rate */}
-            <div className="p-5 rounded-xl bg-[#0c121e] border border-slate-800 flex flex-col justify-between space-y-3">
-              <span className="text-xs text-slate-400 font-medium">Reconciliation Health</span>
-              <div>
-                <div className="text-2xl font-bold font-mono text-emerald-400">
-                  {formatPercent(summary.reconciliation_rate)}
-                </div>
-                <p className="text-[11px] text-slate-500 font-mono mt-1">
-                  {formatNumber(summary.matched_count)} Reconciled Cleanly
-                </p>
-              </div>
-              <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-emerald-500 h-full rounded-full transition-all"
-                  style={{ width: `${Math.min(100, summary.reconciliation_rate)}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Card 4: Expected vs Actual Settlement */}
-            <div className="p-5 rounded-xl bg-[#0c121e] border border-slate-800 flex flex-col justify-between space-y-3">
-              <span className="text-xs text-slate-400 font-medium">Net Settlement Payout</span>
-              <div>
-                <div className="text-2xl font-bold font-mono text-blue-400">
-                  {formatCurrency(summary.actual_settlement)}
-                </div>
-                <p className="text-[11px] text-slate-500 font-mono mt-1">
-                  Expected: {formatCurrency(summary.expected_settlement)}
-                </p>
-              </div>
-              <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-mono">Engine Latency</span>
-                <span className="text-slate-300 font-mono">{summary.duration_ms} ms</span>
-              </div>
-            </div>
-
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+              {formatNumber(summary?.total_transactions)} Transactions Processed
+            </span>
           </div>
 
-          {/* Middle Row: Settlement Comparison & Breakdown */}
-          <div className="grid lg:grid-cols-3 gap-6">
-            
-            {/* Settlement Comparison Card */}
-            <div className="lg:col-span-1 p-6 rounded-xl bg-[#0c121e] border border-slate-800 space-y-4 flex flex-col justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-white tracking-tight flex items-center space-x-2">
-                  <DollarSign className="w-4 h-4 text-blue-400" />
-                  <span>Settlement Truth Comparison</span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Comparing gross captured volume minus deductions against actual bank settlement credits.
-                </p>
-              </div>
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider block">
+              Unexplained Amount
+            </span>
+            <div className="pt-1">
+              <FinancialAmount
+                amount={unexplainedAmount}
+                size="3xl"
+                variant={unexplainedAmount > 0 ? "danger" : "positive"}
+              />
+            </div>
+            <p className="text-xs text-slate-400 pt-1">
+              Net reconciliation difference between expected payout and actual settled bank funds.
+            </p>
+          </div>
 
-              <div className="space-y-3 text-xs font-mono">
-                <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Expected Settlement</span>
-                  <span className="font-bold text-blue-400">{formatCurrency(summary.expected_settlement)}</span>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Actual Bank Credit</span>
-                  <span className="font-bold text-slate-200">{formatCurrency(summary.actual_settlement)}</span>
-                </div>
-                <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-900/40 flex items-center justify-between">
-                  <span className="text-rose-400 font-medium">Variance / Leakage</span>
-                  <span className="font-bold text-rose-300">{formatCurrency(summary.unexplained_difference)}</span>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-900/50 text-[11px] text-slate-400 leading-relaxed">
-                Formula: <span className="font-mono text-slate-300">Net = Payment - Refunds - Fees - Taxes</span>
-              </div>
+          {/* Issue Breakdown Bar */}
+          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-800/80">
+            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850">
+              <span className="text-[10px] font-mono uppercase text-rose-400 block font-semibold">
+                Open Issues
+              </span>
+              <span className="text-lg font-bold font-mono text-white">
+                {formatNumber(openCount)}
+              </span>
             </div>
 
-            {/* Exception Breakdown Horizontal List / Bars */}
-            <div className="lg:col-span-2 p-6 rounded-xl bg-[#0c121e] border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-white tracking-tight flex items-center space-x-2">
-                    <BarChart3 className="w-4 h-4 text-emerald-400" />
-                    <span>Exception Class Breakdown</span>
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Distribution across the 7 deterministic exception categories.
-                  </p>
-                </div>
-                <Link
-                  href={`/exceptions?dataset_id=${datasetId}`}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1"
-                >
-                  <span>View All ({summary.exception_count})</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
+            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850">
+              <span className="text-[10px] font-mono uppercase text-amber-400 block font-semibold">
+                Investigating
+              </span>
+              <span className="text-lg font-bold font-mono text-white">
+                {formatNumber(investigatingCount)}
+              </span>
+            </div>
 
-              <div className="space-y-2.5 pt-1">
-                {Object.entries(summary.exception_breakdown).length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-500 font-mono">
-                    Zero exceptions flagged. All transactions reconciled cleanly.
-                  </div>
+            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850">
+              <span className="text-[10px] font-mono uppercase text-emerald-400 block font-semibold">
+                Resolved
+              </span>
+              <span className="text-lg font-bold font-mono text-white">
+                {formatNumber(resolvedCount)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. FINANCIAL HEALTH INDICATOR: "Why is it unexplained?" */}
+        <div className="lg:col-span-5 p-6 rounded-xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
+              Ledger Settlement Rate
+            </span>
+            <span className="text-xs font-mono font-semibold text-emerald-400">
+              {recRate.toFixed(1)}% Matched
+            </span>
+          </div>
+
+          {/* Visual Percentage Bar */}
+          <div className="space-y-3">
+            <div className="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+              <div
+                className="bg-emerald-500 transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(0, recRate))}%` }}
+                title={`Reconciled: ${recRate.toFixed(1)}%`}
+              />
+              <div
+                className="bg-rose-500 transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(0, unrecRate))}%` }}
+                title={`Unreconciled: ${unrecRate.toFixed(1)}%`}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Reconciled: <strong className="text-slate-200">{recRate.toFixed(1)}%</strong></span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                <span>Unreconciled: <strong className="text-slate-200">{unrecRate.toFixed(1)}%</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Settlement Totals */}
+          <div className="space-y-2 pt-2 border-t border-slate-800/80 text-xs">
+            <div className="flex justify-between text-slate-400">
+              <span>Expected Settlement:</span>
+              <FinancialAmount amount={summary?.expected_settlement} size="sm" />
+            </div>
+            <div className="flex justify-between text-slate-400">
+              <span>Actual Bank Payout:</span>
+              <FinancialAmount amount={summary?.actual_settlement} size="sm" />
+            </div>
+            <div className="flex justify-between text-slate-400 pt-1 border-t border-slate-850 font-semibold">
+              <span className="text-rose-400">Unexplained Difference:</span>
+              <FinancialAmount amount={summary?.unexplained_difference} size="sm" variant="danger" />
+            </div>
+          </div>
+
+          <div className="pt-1">
+            <Link
+              href={`/investigate?dataset_id=${datasetId}`}
+              className="w-full py-2 px-3 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 border border-blue-800/40 text-blue-300 text-xs font-semibold flex items-center justify-center space-x-2 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span>Ask LeakLens About This Gap</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-1" />
+            </Link>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. WHERE MONEY IS GETTING STUCK: "What should I investigate first?" */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
+              <span>Where Money Is Getting Stuck</span>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                Top Priority
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              High-impact financial discrepancies prioritized for merchant dispute and investigation.
+            </p>
+          </div>
+
+          <Link
+            href={`/exceptions?dataset_id=${datasetId}`}
+            className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center space-x-1 self-start sm:self-auto"
+          >
+            <span>View All Exceptions</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Priority Table */}
+        <div className="rounded-xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="p-3.5 pl-5">Financial Issue</th>
+                  <th className="p-3.5">Payment ID</th>
+                  <th className="p-3.5">Financial Impact</th>
+                  <th className="p-3.5">Severity</th>
+                  <th className="p-3.5">Status</th>
+                  <th className="p-3.5">Age / Date</th>
+                  <th className="p-3.5 text-right pr-5">Investigation</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {topExceptions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-500 font-sans">
+                      No unresolved discrepancies found in this dataset session.
+                    </td>
+                  </tr>
                 ) : (
-                  Object.entries(summary.exception_breakdown).map(([typeKey, count]) => {
-                    const pct = summary.exception_count > 0 ? (count / summary.exception_count) * 100 : 0;
-                    return (
-                      <div key={typeKey} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-mono">
-                          <span className="text-slate-300 font-sans">{EXCEPTION_TITLES[typeKey] || typeKey}</span>
-                          <span className="text-slate-400 font-mono">
-                            {count} <span className="text-[10px] text-slate-500">({pct.toFixed(1)}%)</span>
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800/60">
-                          <div
-                            className="bg-blue-500 h-full rounded-full transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Priority Attention Section: "What needs my attention?" */}
-          <div className="p-6 rounded-xl bg-[#0c121e] border border-slate-800 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-              <div>
-                <h2 className="text-base font-semibold text-white tracking-tight flex items-center space-x-2">
-                  <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  <span>What needs my attention?</span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  High-priority financial anomalies sorted by deterministic severity and monetary impact.
-                </p>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                {actionSummary && (
-                  <div className="flex items-center space-x-1 text-[11px] font-mono">
-                    <span className="px-2 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-400 font-semibold">
-                      {actionSummary.open} Open
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/60 text-amber-400 font-semibold">
-                      {actionSummary.investigating} In Review
-                    </span>
-                  </div>
-                )}
-
-                <Link
-                  href={`/action-center?dataset_id=${datasetId}`}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1 font-semibold"
-                >
-                  <span>Open Action Center</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-
-            {topExceptions.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-500 font-mono">
-                No critical or high-severity exceptions detected in this dataset.
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {topExceptions.map((exc) => {
-                  const sevStyle = SEVERITY_COLORS[exc.severity] || SEVERITY_COLORS.MEDIUM;
-                  return (
-                    <div
-                      key={exc.exception_id}
-                      className="p-4 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  topExceptions.map((item) => (
+                    <tr
+                      key={item.exception_id}
+                      className="hover:bg-slate-900/40 transition-colors group cursor-pointer"
+                      onClick={() => router.push(`/exceptions/${item.exception_id}?dataset_id=${datasetId}`)}
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2.5">
-                          <span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${sevStyle.bg} ${sevStyle.text} ${sevStyle.border}`}>
-                            {exc.severity}
-                          </span>
-                          <span className="font-semibold text-xs text-white">
-                            {EXCEPTION_TITLES[exc.exception_type] || exc.exception_type}
-                          </span>
-                          {exc.payment_id && (
-                            <span className="text-xs font-mono text-blue-400">
-                              {exc.payment_id}
-                            </span>
-                          )}
+                      <td className="p-3.5 pl-5 font-sans">
+                        <div className="font-semibold text-slate-100">
+                          {EXCEPTION_TITLES[item.exception_type] || item.exception_type}
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                          {exc.description}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center space-x-4 self-end sm:self-center shrink-0">
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-500 font-mono block">Potential Impact</span>
-                          <span className="font-bold text-sm font-mono text-rose-400">
-                            {formatCurrency(exc.amount_discrepancy)}
-                          </span>
+                        <div className="text-[11px] font-mono text-slate-500 truncate max-w-xs">
+                          {item.exception_id}
                         </div>
+                      </td>
 
+                      <td className="p-3.5 text-slate-300">
+                        {item.payment_id || <span className="text-slate-600">N/A</span>}
+                      </td>
+
+                      <td className="p-3.5">
+                        <FinancialAmount
+                          amount={item.amount_discrepancy}
+                          size="sm"
+                          variant="danger"
+                        />
+                      </td>
+
+                      <td className="p-3.5">
+                        <SeverityBadge severity={item.severity} size="sm" />
+                      </td>
+
+                      <td className="p-3.5">
+                        <StatusBadge status={item.status} size="sm" />
+                      </td>
+
+                      <td className="p-3.5 text-slate-400 text-[11px]">
+                        {formatDate(item.created_at)}
+                      </td>
+
+                      <td className="p-3.5 text-right pr-5">
                         <Link
-                          href={`/exceptions/${exc.exception_id}?dataset_id=${datasetId}`}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1 transition-colors"
+                          href={`/exceptions/${item.exception_id}?dataset_id=${datasetId}`}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-blue-950/60 hover:bg-blue-900 text-blue-300 text-xs font-sans font-medium transition-colors"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <span>View Details</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
+                          <span>Investigate</span>
+                          <ArrowRight className="w-3 h-3" />
                         </Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </>
-      )}
+        </div>
+      </div>
 
     </div>
   );
@@ -482,7 +455,7 @@ function DashboardContent() {
 export default function DashboardPage() {
   return (
     <AppShell>
-      <Suspense fallback={<div className="text-center py-20 text-slate-500">Loading Financial Overview...</div>}>
+      <Suspense fallback={<LoadingState message="Loading financial overview..." />}>
         <DashboardContent />
       </Suspense>
     </AppShell>

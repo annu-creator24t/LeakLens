@@ -8,24 +8,25 @@ import {
   Send,
   RefreshCw,
   Database,
-  ExternalLink,
   CheckCircle2,
   AlertTriangle,
-  Info,
-  DollarSign,
-  Receipt,
   HelpCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  Layers,
+  Terminal
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import {
   askLeakLens,
   fetchAskSuggestions,
   AskResponse,
-  ChatMessage,
   EvidenceItem
 } from "@/lib/api";
+import { EvidencePill } from "@/components/ui/Badges";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { LoadingState, EmptyState } from "@/components/ui/FeedbackStates";
 
 interface MessageItem {
   id: string;
@@ -40,6 +41,13 @@ interface MessageItem {
   timestamp: string;
 }
 
+const DEFAULT_SUGGESTIONS = [
+  "How much money is currently unexplained?",
+  "Which issues have the highest financial impact?",
+  "Which payments are missing settlements?",
+  "What is causing most of today's discrepancies?",
+];
+
 function InvestigateContent() {
   const searchParams = useSearchParams();
   const datasetId = searchParams.get("dataset_id") || "";
@@ -47,7 +55,7 @@ function InvestigateContent() {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputQuery, setInputQuery] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,17 +74,11 @@ function InvestigateContent() {
   const loadSuggestions = async () => {
     try {
       const sugs = await fetchAskSuggestions(datasetId);
-      setSuggestions(sugs);
+      if (sugs && sugs.length > 0) {
+        setSuggestions(sugs);
+      }
     } catch {
-      // Fallback suggestions
-      setSuggestions([
-        "How much money is currently unexplained?",
-        "Why is today's settlement lower than expected?",
-        "Show me my top 5 discrepancies.",
-        "Which payments haven't settled?",
-        "How many critical issues do I have?",
-        "Which exception type has the highest financial impact?",
-      ]);
+      setSuggestions(DEFAULT_SUGGESTIONS);
     }
   };
 
@@ -118,7 +120,7 @@ function InvestigateContent() {
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to retrieve investigation results.");
+      setError(err instanceof Error ? err.message : "Something went wrong while executing this ledger query.");
     } finally {
       setLoading(false);
     }
@@ -133,102 +135,108 @@ function InvestigateContent() {
 
   if (!datasetId) {
     return (
-      <div className="p-12 rounded-xl border border-dashed border-slate-800 bg-[#0c121e]/40 flex flex-col items-center justify-center text-center space-y-4">
-        <Database className="w-12 h-12 text-slate-600" />
-        <h2 className="text-base font-semibold text-slate-200">No Dataset Selected</h2>
-        <p className="text-xs text-slate-400">Select a financial session to begin investigating data.</p>
-        <Link href="/dashboard" className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium">
-          Go to Dashboard
-        </Link>
-      </div>
+      <EmptyState
+        icon={Database}
+        title="No Financial Dataset Selected"
+        description="Select a financial session to begin querying ledger evidence."
+        action={
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+          >
+            Go to Dashboard
+          </Link>
+        }
+      />
     );
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
+    <div className="space-y-6 max-w-5xl mx-auto flex flex-col h-[calc(100vh-8.5rem)]">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800 shrink-0">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center space-x-2.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
               <Sparkles className="w-4 h-4" />
             </div>
-            <span>Ask LeakLens</span>
+            <span>Ask Your Financial Data</span>
           </h1>
           <p className="text-slate-400 text-xs mt-0.5">
-            Investigate your financial session in plain language with grounded reconciliation proofs.
+            Ask questions. Get answers backed by your ledger.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-            Session: <strong className="text-blue-400">{datasetId}</strong>
-          </span>
-        </div>
+        {conversationId && (
+          <button
+            type="button"
+            onClick={() => {
+              setMessages([]);
+              setConversationId(null);
+            }}
+            className="text-xs text-slate-400 hover:text-slate-200 border border-slate-800 bg-slate-900 px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors self-start sm:self-auto cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>New Session</span>
+          </button>
+        )}
       </div>
 
-      {/* Chat Messages Container */}
-      <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-        
-        {/* Empty State / Suggested Questions */}
-        {messages.length === 0 && (
-          <div className="p-8 rounded-xl border border-slate-800 bg-[#0c121e] space-y-6 text-center max-w-2xl mx-auto my-8">
-            <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 mx-auto">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div className="space-y-1.5">
-              <h2 className="text-base font-bold text-white tracking-tight">Ask anything about your financial data</h2>
-              <p className="text-xs text-slate-400">
-                LeakLens converts your questions into deterministic database queries and explains the findings with auditable evidence.
-              </p>
-            </div>
+      {/* Suggested Questions Pill Row */}
+      {messages.length === 0 && (
+        <div className="space-y-3 shrink-0 p-5 rounded-xl border border-slate-800 bg-[#0c121e]">
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+            <span>Suggested Questions (Ledger-Grounded)</span>
+          </span>
 
-            {/* Suggestions Grid */}
-            <div className="space-y-2 text-left">
-              <span className="text-[10px] uppercase font-mono text-slate-500 font-semibold block px-1">
-                Suggested Financial Investigations
-              </span>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {suggestions.map((sug, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSendQuestion(sug)}
-                    className="p-3 rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 hover:text-white transition-all text-left flex items-start space-x-2 group cursor-pointer"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                    <span>{sug}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="grid sm:grid-cols-2 gap-2.5 pt-1">
+            {suggestions.map((sug, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSendQuestion(sug)}
+                className="text-left p-3 rounded-lg bg-slate-950/80 hover:bg-slate-900 border border-slate-800/80 hover:border-blue-700/60 text-xs text-slate-200 transition-all flex items-center justify-between group cursor-pointer"
+              >
+                <span>{sug}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-400 shrink-0 ml-2" />
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Message Thread */}
+      {/* Conversation Thread */}
+      <div className="flex-1 overflow-y-auto space-y-6 pr-2">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+            className={`flex flex-col ${
+              msg.role === "user" ? "items-end" : "items-start"
+            }`}
           >
-            {/* User Message */}
             {msg.role === "user" ? (
-              <div className="max-w-2xl bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-xs shadow-md space-y-1">
-                <p className="font-medium">{msg.content}</p>
-                <span className="text-[10px] text-blue-200 block text-right font-mono">{msg.timestamp}</span>
+              /* User Query Bubble */
+              <div className="max-w-2xl p-4 rounded-2xl rounded-tr-none bg-blue-600 text-white text-xs font-medium space-y-1 shadow-lg">
+                <p>{msg.content}</p>
+                <span className="text-[10px] text-blue-200 block text-right font-mono">
+                  {msg.timestamp}
+                </span>
               </div>
             ) : (
               /* Assistant Answer Card */
-              <div className="w-full max-w-3xl rounded-2xl rounded-tl-sm border border-slate-800 bg-[#0c121e] p-5 space-y-4 shadow-xl">
+              <div className="w-full max-w-4xl p-6 rounded-2xl rounded-tl-none border border-slate-800 bg-[#0c121e] space-y-5 shadow-xl">
                 
-                {/* Assistant Header */}
-                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                {/* Intent & Timing Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
                   <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 rounded-md bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
-                      <Sparkles className="w-3.5 h-3.5" />
+                    <div className="w-5 h-5 rounded bg-blue-950 border border-blue-800/50 flex items-center justify-center text-blue-400">
+                      <Sparkles className="w-3 h-3" />
                     </div>
-                    <span className="text-xs font-bold text-white tracking-tight">LeakLens Financial Intelligence</span>
+                    <span className="text-xs font-mono font-semibold text-slate-300">
+                      LeakLens Controller
+                    </span>
                     {msg.intent && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
                         {msg.intent}
@@ -236,67 +244,68 @@ function InvestigateContent() {
                     )}
                   </div>
 
-                  <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-500">
-                    {msg.latency_ms && <span>{msg.latency_ms} ms</span>}
-                    <span>•</span>
-                    <span>{msg.timestamp}</span>
-                  </div>
+                  {msg.latency_ms !== undefined && (
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {msg.latency_ms} ms execution
+                    </span>
+                  )}
                 </div>
 
-                {/* Primary Answer Narrative */}
-                <div className="text-xs text-slate-200 leading-relaxed font-medium">
+                {/* Primary Answer Text */}
+                <div className="text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-line">
                   {msg.content}
                 </div>
 
-                {/* Key Findings Checklist */}
+                {/* Key Findings */}
                 {msg.key_findings && msg.key_findings.length > 0 && (
-                  <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-2">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold block">
-                      Key Findings
+                  <div className="space-y-2 p-3.5 rounded-lg bg-slate-950/60 border border-slate-850">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-blue-400 block">
+                      Key Ledger Findings
                     </span>
                     <ul className="space-y-1.5 text-xs text-slate-300">
-                      {msg.key_findings.map((f, idx) => (
-                        <li key={idx} className="flex items-start space-x-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-                          <span>{f}</span>
+                      {msg.key_findings.map((item, fIdx) => (
+                        <li key={fIdx} className="flex items-start space-x-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {/* Evidence Metric Chips */}
+                {/* Evidence Pills linking back to records */}
                 {msg.evidence && msg.evidence.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold block">
-                      Grounded Evidence & Direct Links
+                  <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-semibold">
+                      Supporting Evidence Facts
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      {msg.evidence.map((ev, idx) => {
-                        const content = (
-                          <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-mono flex items-center space-x-2 transition-colors">
-                            <span className="text-slate-400 text-[11px]">{ev.label}:</span>
-                            <strong className="text-white font-bold">{ev.value}</strong>
-                            {ev.link && <ExternalLink className="w-3 h-3 text-blue-400 ml-1" />}
-                          </div>
-                        );
-                        return ev.link ? (
-                          <Link key={idx} href={ev.link}>
-                            {content}
-                          </Link>
-                        ) : (
-                          <div key={idx}>{content}</div>
-                        );
-                      })}
+                      {msg.evidence.map((ev, eIdx) => (
+                        <EvidencePill
+                          key={eIdx}
+                          label={`${ev.label}: ${ev.value}`}
+                          variant={ev.type === "amount" ? "danger" : "neutral"}
+                          href={ev.link ? `${ev.link}${ev.link.includes("?") ? "&" : "?"}dataset_id=${datasetId}` : undefined}
+                        />
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* Limitations */}
-                {msg.limitations && msg.limitations.length > 0 && (
-                  <div className="text-[10px] text-slate-500 font-mono pt-1">
-                    <span className="text-slate-400 font-semibold">Scope: </span>
-                    {msg.limitations.join(" • ")}
+                {/* Related Exceptions Shortcuts */}
+                {msg.related_exceptions && msg.related_exceptions.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[10px] font-mono uppercase text-slate-500">Related Issues:</span>
+                    {msg.related_exceptions.map((excId) => (
+                      <Link
+                        key={excId}
+                        href={`/exceptions/${excId}?dataset_id=${datasetId}`}
+                        className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-950/50 hover:bg-blue-900 border border-blue-800/50 text-blue-300 flex items-center space-x-1 transition-colors"
+                      >
+                        <span>{excId}</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                      </Link>
+                    ))}
                   </div>
                 )}
 
@@ -307,48 +316,49 @@ function InvestigateContent() {
 
         {/* Loading Indicator */}
         {loading && (
-          <div className="flex items-center space-x-3 p-4 rounded-xl bg-[#0c121e] border border-slate-800 text-xs text-blue-400 font-mono animate-pulse w-fit">
-            <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>Investigating your financial data & calculating evidence...</span>
-          </div>
-        )}
-
-        {/* Error Alert */}
-        {error && (
-          <div className="p-4 rounded-lg bg-rose-950/40 border border-rose-900 text-xs text-rose-300">
-            {error}
+          <div className="flex items-start space-x-3 p-4 rounded-xl border border-slate-800 bg-[#0c121e] max-w-md">
+            <Sparkles className="w-4 h-4 text-blue-400 animate-spin shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <span className="font-semibold text-slate-200">Investigating ledger evidence...</span>
+              <p className="text-[11px] text-slate-400 font-mono">Executing query plan across dataset records</p>
+            </div>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Chat Input Bar */}
-      <div className="pt-2 border-t border-slate-800 shrink-0">
+      {/* Error state */}
+      {error && (
+        <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-900/50 text-xs text-rose-300 shrink-0">
+          {error}
+        </div>
+      )}
+
+      {/* Input Bar */}
+      <div className="pt-2 shrink-0">
         <div className="relative flex items-center">
           <input
             type="text"
-            placeholder="Ask about unexplained money, missing settlements, top issues, or payment IDs..."
             value={inputQuery}
-            disabled={loading}
             onChange={(e) => setInputQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full pl-4 pr-24 py-3.5 bg-[#0c121e] border border-slate-800 rounded-xl text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
+            disabled={loading}
+            placeholder="Ask anything about your ledger (e.g. 'How much money is currently unexplained?')..."
+            className="w-full pl-4 pr-12 py-3.5 rounded-xl bg-[#0c121e] border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs text-slate-100 placeholder:text-slate-500 outline-none transition-colors shadow-lg disabled:opacity-50"
           />
           <button
             type="button"
             disabled={loading || !inputQuery.trim()}
             onClick={() => handleSendQuestion()}
-            className="absolute right-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer"
+            className="absolute right-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white transition-colors cursor-pointer"
           >
-            <span>Ask</span>
-            <Send className="w-3 h-3" />
+            <Send className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-2 px-1">
-          <span>Supported: Summaries, Discrepancies, Top Issues, Exception Types, Transaction Lookups</span>
-          <span>Deterministic ground truth • AI reasoning</span>
-        </div>
+        <p className="text-[10px] text-slate-400 font-mono text-center pt-2">
+          Grounded query engine • Formulates deterministic database filters without calculating math in prompts
+        </p>
       </div>
 
     </div>
@@ -358,7 +368,7 @@ function InvestigateContent() {
 export default function InvestigatePage() {
   return (
     <AppShell>
-      <Suspense fallback={<div className="text-center py-20 text-slate-500">Loading Ask LeakLens...</div>}>
+      <Suspense fallback={<LoadingState message="Loading financial query engine..." />}>
         <InvestigateContent />
       </Suspense>
     </AppShell>

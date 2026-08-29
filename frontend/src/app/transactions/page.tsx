@@ -6,18 +6,19 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
   Receipt,
   Search,
-  Filter,
-  Eye,
   RefreshCw,
   Database,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
-  AlertCircle
+  ArrowRight
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import { fetchTransactions, TransactionItem } from "@/lib/api";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/formatters";
+import { FinancialAmount } from "@/components/ui/FinancialAmount";
+import { StatusBadge } from "@/components/ui/Badges";
+import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { formatDate, formatNumber } from "@/lib/formatters";
 
 const STATUS_FILTERS = [
   "ALL",
@@ -29,7 +30,7 @@ const STATUS_FILTERS = [
   "UNEXPECTED_FEE",
   "DELAYED_SETTLEMENT",
   "MISMATCH",
-  "FAILED"
+  "FAILED",
 ];
 
 function TransactionsContent() {
@@ -107,14 +108,19 @@ function TransactionsContent() {
 
   if (!datasetId) {
     return (
-      <div className="p-12 rounded-xl border border-dashed border-slate-800 bg-[#0c121e]/40 flex flex-col items-center justify-center text-center space-y-4">
-        <Database className="w-12 h-12 text-slate-600" />
-        <h2 className="text-base font-semibold text-slate-200">No Dataset Selected</h2>
-        <p className="text-xs text-slate-400">Select a financial session to inspect the transaction ledger.</p>
-        <Link href="/dashboard" className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium">
-          Go to Dashboard
-        </Link>
-      </div>
+      <EmptyState
+        icon={Database}
+        title="No Financial Dataset Selected"
+        description="Select a financial session to inspect the transaction ledger."
+        action={
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+          >
+            Go to Dashboard
+          </Link>
+        }
+      />
     );
   }
 
@@ -123,10 +129,21 @@ function TransactionsContent() {
   return (
     <div className="space-y-6">
       
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
+          { label: "Transactions", isCurrent: true },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center space-x-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+              <Receipt className="w-4 h-4" />
+            </div>
             <span>Reconciled Transactions Ledger</span>
             <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
               {formatNumber(total)} Records
@@ -141,169 +158,154 @@ function TransactionsContent() {
           type="button"
           disabled={loading}
           onClick={loadTransactions}
-          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer self-start"
+          className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2 transition-colors cursor-pointer self-start"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-400" : ""}`} />
-          <span>Refresh</span>
+          <span>Refresh Ledger</span>
         </button>
       </div>
 
-      {/* Filter Controls */}
-      <div className="p-4 rounded-xl bg-[#0c121e] border border-slate-800 space-y-3">
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Search by Payment ID, Order ID, or status..."
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-            />
-          </div>
+      {/* Toolbar */}
+      <div className="p-4 rounded-xl border border-slate-800 bg-[#0c121e] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search by Payment ID or Order ID..."
+            className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-blue-500 transition-colors font-mono"
+          />
+        </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <span className="text-xs text-slate-400">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-blue-500"
-            >
-              {STATUS_FILTERS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center space-x-2 text-xs text-slate-400">
+          <span>Status:</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            aria-label="Filter by Transaction Status"
+            className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono outline-none focus:border-blue-500"
+          >
+            {STATUS_FILTERS.map((s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="p-4 rounded-lg bg-rose-950/40 border border-rose-900 text-xs text-rose-300">
-          {error}
-        </div>
-      )}
+      {/* Error state */}
+      {error && <ErrorState message={error} onRetry={loadTransactions} />}
 
-      {/* Transactions Table */}
-      <div className="rounded-xl border border-slate-800 bg-[#0c121e] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-slate-900/80 text-slate-400 font-mono border-b border-slate-800">
-              <tr>
-                <th className="p-3.5 pl-4">Payment ID</th>
-                <th className="p-3.5">Order ID</th>
-                <th className="p-3.5 text-right">Gross Amount</th>
-                <th className="p-3.5 text-right">Refund</th>
-                <th className="p-3.5 text-right">Fee</th>
-                <th className="p-3.5 text-right">Expected Net</th>
-                <th className="p-3.5 text-right">Actual Settled</th>
-                <th className="p-3.5 text-center">Status</th>
-                <th className="p-3.5 text-center pr-4">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono">
-              {loading ? (
+      {/* Table Container */}
+      <div className="rounded-xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-lg">
+        {loading ? (
+          <LoadingState
+            message="Loading transactions ledger..."
+            subMessage="Streaming verified rows"
+            size="md"
+          />
+        ) : transactions.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 font-mono text-xs">
+            No transactions match the selected filter.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-500">
-                    <RefreshCw className="w-5 h-5 text-blue-400 animate-spin mx-auto mb-2" />
-                    <span>Loading transactions...</span>
-                  </td>
+                  <th className="p-3.5 pl-5">Payment ID</th>
+                  <th className="p-3.5">Order ID</th>
+                  <th className="p-3.5">Gross Amount</th>
+                  <th className="p-3.5">Expected Payout</th>
+                  <th className="p-3.5">Actual Settled</th>
+                  <th className="p-3.5">Difference</th>
+                  <th className="p-3.5">Status</th>
+                  <th className="p-3.5">Date</th>
+                  <th className="p-3.5 text-right pr-5">Detail</th>
                 </tr>
-              ) : transactions.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-500 font-sans">
-                    No transactions found matching criteria.
-                  </td>
-                </tr>
-              ) : (
-                transactions.map((tx) => {
-                  const isClean = tx.status === "RECONCILED";
-                  return (
-                    <tr key={tx.payment_id} className="hover:bg-slate-900/40 transition-colors">
-                      <td className="p-3.5 pl-4 font-bold text-blue-400">
-                        <Link href={`/transactions/${tx.payment_id}?dataset_id=${datasetId}`} className="hover:underline">
-                          {tx.payment_id}
-                        </Link>
-                      </td>
-                      <td className="p-3.5 text-slate-300">
-                        {tx.order_id}
-                      </td>
-                      <td className="p-3.5 text-right text-slate-200">
-                        {formatCurrency(tx.amount)}
-                      </td>
-                      <td className="p-3.5 text-right text-slate-400">
-                        {tx.refund_amount > 0 ? formatCurrency(tx.refund_amount) : "—"}
-                      </td>
-                      <td className="p-3.5 text-right text-slate-400">
-                        {formatCurrency(tx.fee_amount)}
-                      </td>
-                      <td className="p-3.5 text-right font-medium text-blue-400">
-                        {formatCurrency(tx.expected_settlement)}
-                      </td>
-                      <td className="p-3.5 text-right text-slate-300">
-                        {formatCurrency(tx.actual_settlement)}
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${
-                            isClean
-                              ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/60"
-                              : "bg-rose-950/60 text-rose-400 border-rose-800/60"
-                          }`}
-                        >
-                          {tx.status}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-center pr-4">
-                        <Link
-                          href={`/transactions/${tx.payment_id}?dataset_id=${datasetId}`}
-                          className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors inline-flex items-center space-x-1"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-blue-400" />
-                          <span>Audit</span>
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {transactions.map((tx) => (
+                  <tr
+                    key={tx.payment_id}
+                    className="hover:bg-slate-900/40 transition-colors group cursor-pointer"
+                    onClick={() => router.push(`/transactions/${tx.payment_id}?dataset_id=${datasetId}`)}
+                  >
+                    <td className="p-3.5 pl-5 font-semibold text-slate-100">
+                      {tx.payment_id}
+                    </td>
+                    <td className="p-3.5 text-slate-400">{tx.order_id}</td>
+                    <td className="p-3.5">
+                      <FinancialAmount amount={tx.amount} size="sm" variant="neutral" />
+                    </td>
+                    <td className="p-3.5 text-slate-400">
+                      <FinancialAmount amount={tx.expected_settlement} size="sm" variant="muted" />
+                    </td>
+                    <td className="p-3.5 text-slate-400">
+                      <FinancialAmount amount={tx.actual_settlement} size="sm" variant="muted" />
+                    </td>
+                    <td className="p-3.5">
+                      {tx.difference !== 0 ? (
+                        <FinancialAmount amount={tx.difference} size="sm" variant="danger" />
+                      ) : (
+                        <span className="text-slate-500 font-mono">₹0.00</span>
+                      )}
+                    </td>
+                    <td className="p-3.5">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          tx.status === "RECONCILED"
+                            ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/50"
+                            : "bg-rose-950/40 text-rose-400 border-rose-800/50"
+                        }`}
+                      >
+                        {tx.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-slate-400 text-[11px]">
+                      {formatDate(tx.created_at)}
+                    </td>
+                    <td className="p-3.5 text-right pr-5">
+                      <Link
+                        href={`/transactions/${tx.payment_id}?dataset_id=${datasetId}`}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-blue-950/60 hover:bg-blue-900 text-blue-300 text-xs font-sans font-medium transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        {/* Pagination Footer */}
-        {total > limit && (
-          <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>
-              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {formatNumber(total)} records
-            </span>
-
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
+            <div>
+              Page <strong className="text-slate-200">{page}</strong> of <strong className="text-slate-200">{totalPages}</strong>
+            </div>
             <div className="flex items-center space-x-2">
               <button
                 type="button"
-                disabled={page === 1}
-                onClick={() => handlePageChange(Math.max(1, page - 1))}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 disabled:opacity-40 hover:text-white flex items-center space-x-1"
+                disabled={page <= 1 || loading}
+                onClick={() => handlePageChange(page - 1)}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-800 text-slate-200 transition-colors"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span>Previous</span>
+                Previous
               </button>
-
-              <span className="font-mono text-white px-2">
-                Page {page} of {totalPages}
-              </span>
-
               <button
                 type="button"
-                disabled={page >= totalPages}
-                onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 disabled:opacity-40 hover:text-white flex items-center space-x-1"
+                disabled={page >= totalPages || loading}
+                onClick={() => handlePageChange(page + 1)}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-800 text-slate-200 transition-colors"
               >
-                <span>Next</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                Next
               </button>
             </div>
           </div>
@@ -317,7 +319,7 @@ function TransactionsContent() {
 export default function TransactionsPage() {
   return (
     <AppShell>
-      <Suspense fallback={<div className="text-center py-20 text-slate-500">Loading Transactions Ledger...</div>}>
+      <Suspense fallback={<LoadingState message="Loading transactions ledger..." />}>
         <TransactionsContent />
       </Suspense>
     </AppShell>
