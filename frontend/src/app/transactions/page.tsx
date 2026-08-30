@@ -199,16 +199,57 @@ function TransactionsContent() {
       {error && <ErrorState message={error} onRetry={loadTransactions} />}
 
       {/* Table Container */}
-      <div className="rounded-xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-lg">
-        {loading ? (
-          <LoadingState
-            message="Loading transactions ledger..."
-            subMessage="Streaming verified rows"
-            size="md"
-          />
+      <div className="rounded-xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-lg" aria-busy={loading}>
+        {loading && transactions.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="p-3.5 pl-5">Payment ID</th>
+                  <th className="p-3.5">Order ID</th>
+                  <th className="p-3.5">Gross Amount</th>
+                  <th className="p-3.5">Expected Payout</th>
+                  <th className="p-3.5">Actual Settled</th>
+                  <th className="p-3.5">Difference</th>
+                  <th className="p-3.5">Status</th>
+                  <th className="p-3.5">Date</th>
+                  <th className="p-3.5 text-right pr-5">Detail</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 animate-pulse">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <tr key={`skel-tx-${i}`}>
+                    <td className="p-3.5 pl-5"><div className="h-4 w-28 rounded bg-slate-800/80" /></td>
+                    <td className="p-3.5"><div className="h-4 w-24 rounded bg-slate-800/60" /></td>
+                    <td className="p-3.5"><div className="h-4 w-16 rounded bg-slate-800/70" /></td>
+                    <td className="p-3.5"><div className="h-4 w-16 rounded bg-slate-800/50" /></td>
+                    <td className="p-3.5"><div className="h-4 w-16 rounded bg-slate-800/50" /></td>
+                    <td className="p-3.5"><div className="h-4 w-14 rounded bg-slate-800/50" /></td>
+                    <td className="p-3.5"><div className="h-5 w-20 rounded bg-slate-800/60" /></td>
+                    <td className="p-3.5"><div className="h-4 w-18 rounded bg-slate-800/40" /></td>
+                    <td className="p-3.5 text-right pr-5"><div className="h-4 w-6 rounded bg-slate-800/40 ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : transactions.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 font-mono text-xs">
-            No transactions match the selected filter.
+          <div className="p-12 text-center space-y-3">
+            <p className="text-slate-400 font-mono text-xs">No transactions match the selected filter criteria.</p>
+            {(statusFilter !== "ALL" || search.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("ALL");
+                  setSearch("");
+                  setPage(1);
+                  updateUrl({ status: "ALL", search: "", page: 1 });
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Reset All Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
