@@ -28,7 +28,7 @@ router = APIRouter(prefix="", tags=["Data Ingestion & Dataset Management"])
 async def start_upload_session():
     """Starts a new financial CSV upload session."""
     try:
-        return upload_pipeline.start_session()
+        return await upload_pipeline.start_session()
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -61,7 +61,7 @@ async def upload_session_file(
 async def update_column_mapping(upload_id: str, request: MappingUpdateRequest):
     """Updates custom user-defined column mappings for an uploaded file."""
     try:
-        upload_pipeline.update_mappings(upload_id, request.file_type, request.mappings)
+        await upload_pipeline.update_mappings(upload_id, request.file_type, request.mappings)
         return {"success": True, "message": "Column mappings updated successfully."}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -83,7 +83,7 @@ async def validate_upload_session(upload_id: str):
 @router.get("/upload/{upload_id}/validation", response_model=UploadSessionState)
 async def get_session_validation(upload_id: str):
     """Retrieves current validation status, summaries, and issue breakdowns for the session."""
-    session = upload_pipeline.get_session(upload_id)
+    session = await upload_pipeline.get_session(upload_id)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload session not found.")
     return session

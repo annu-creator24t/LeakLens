@@ -84,7 +84,46 @@ class UploadPipelineService:
         self._parsed_rows_cache: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}  # upload_id -> {file_type: rows}
         self._datasets_in_memory: Dict[str, Dict[str, Any]] = {}  # dataset_id -> metadata dict
 
-    def start_session(self) -> StartUploadResponse:
+    async def _ensure_session_loaded(self, upload_id: str) -> Optional[UploadSessionState]:
+        """Loads session from memory or recovers from MongoDB if connected."""
+        if upload_id in self._sessions:
+            return self._sessions[upload_id]
+
+        db = db_manager.get_db()
+        if db is not None:
+            doc = await db["upload_sessions"].find_one({"upload_id": upload_id}, {"_id": 0})
+            if doc:
+                session = UploadSessionState(**doc)
+                self._sessions[upload_id] = session
+                if upload_id not in self._raw_file_contents:
+                    self._raw_file_contents[upload_id] = {}
+                raw_docs = await db["upload_raw_files"].find({"upload_id": upload_id}).to_list(length=None)
+                for rd in raw_docs:
+                    self._raw_file_contents[upload_id][rd["file_type"]] = bytes(rd["file_bytes"])
+                return session
+        return None
+
+    async def _persist_session(self, upload_id: str, file_type: Optional[str] = None, file_bytes: Optional[bytes] = None):
+        """Persists upload session state and raw file contents to MongoDB when available."""
+        db = db_manager.get_db()
+        if db is None:
+            return
+
+        session = self._sessions.get(upload_id)
+        if session:
+            await db["upload_sessions"].update_one(
+                {"upload_id": upload_id},
+                {"$set": session.model_dump()},
+                upsert=True
+            )
+        if file_type and file_bytes:
+            await db["upload_raw_files"].update_one(
+                {"upload_id": upload_id, "file_type": file_type},
+                {"$set": {"upload_id": upload_id, "file_type": file_type, "file_bytes": file_bytes}},
+                upsert=True
+            )
+
+    async def start_session(self) -> StartUploadResponse:
         """Initializes a new isolated upload session."""
         now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         upload_id = f"upl_{datetime.utcnow().strftime('%Y%m%d')}_{uuid.uuid4().hex[:8]}"
@@ -102,6 +141,7 @@ class UploadPipelineService:
         self._sessions[upload_id] = session
         self._raw_file_contents[upload_id] = {}
         self._parsed_rows_cache[upload_id] = {}
+        await self._persist_session(upload_id)
 
         return StartUploadResponse(
             success=True,
@@ -110,8 +150,8 @@ class UploadPipelineService:
             created_at=now_str
         )
 
-    def get_session(self, upload_id: str) -> Optional[UploadSessionState]:
-        return self._sessions.get(upload_id)
+    async def get_session(self, upload_id: str) -> Optional[UploadSessionState]:
+        return await self._ensure_session_loaded(upload_id)
 
     async def ingest_file(
         self,
@@ -121,7 +161,7 @@ class UploadPipelineService:
         file_bytes: bytes
     ) -> FileUploadInfo:
         """Validates file constraints, parses headers, and performs schema auto-detection."""
-        session = self._sessions.get(upload_id)
+        session = await self._ensure_session_loaded(upload_id)
         if not session:
             raise ValueError(f"Upload session '{upload_id}' not found or expired.")
 
@@ -181,7 +221,10 @@ class UploadPipelineService:
 
         session.files[file_type] = info
         session.updated_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        if upload_id not in self._raw_file_contents:
+            self._raw_file_contents[upload_id] = {}
         self._raw_file_contents[upload_id][file_type] = file_bytes
+        await self._persist_session(upload_id, file_type=file_type, file_bytes=file_bytes)
 
         return info
 
@@ -237,9 +280,9 @@ class UploadPipelineService:
 
         return items
 
-    def update_mappings(self, upload_id: str, file_type: str, new_mappings: Dict[str, str]):
+    async def update_mappings(self, upload_id: str, file_type: str, new_mappings: Dict[str, str]):
         """Manually sets user-selected column mappings."""
-        session = self._sessions.get(upload_id)
+        session = await self._ensure_session_loaded(upload_id)
         if not session or file_type not in session.files:
             raise ValueError(f"File '{file_type}' not found in upload session.")
 
@@ -261,10 +304,11 @@ class UploadPipelineService:
 
         file_info.column_mappings = updated_items
         session.updated_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        await self._persist_session(upload_id)
 
     async def validate_session(self, upload_id: str) -> UploadSessionState:
         """Executes full multi-file validation, normalizations, and relationship checks."""
-        session = self._sessions.get(upload_id)
+        session = await self._ensure_session_loaded(upload_id)
         if not session:
             raise ValueError(f"Upload session '{upload_id}' not found.")
 
@@ -278,7 +322,7 @@ class UploadPipelineService:
             raise ValueError("Payments file is required to create a financial dataset.")
 
         for ftype, finfo in session.files.items():
-            f_bytes = self._raw_file_contents[upload_id].get(ftype)
+            f_bytes = self._raw_file_contents.get(upload_id, {}).get(ftype)
             if not f_bytes:
                 continue
 
@@ -355,8 +399,10 @@ class UploadPipelineService:
             # Map to canonical keys
             mapped_row: Dict[str, Any] = {}
             for src_col, val in raw_row.items():
-                if src_col in mappings and mappings[src_col]:
-                    mapped_row[mappings[src_col]] = val.strip() if val else ""
+                src_key = src_col.strip() if src_col else ""
+                target = mappings.get(src_key) or mappings.get(src_col)
+                if target:
+                    mapped_row[target] = val.strip() if val else ""
 
             # Check ID
             id_key = f"{ftype[:-1]}_id" if ftype != "fees" else "payment_id"
@@ -492,7 +538,7 @@ class UploadPipelineService:
         request: Optional[ConfirmDatasetRequest] = None
     ) -> ConfirmDatasetResponse:
         """Commits the uploaded dataset, auto-triggers reconciliation & exception detection."""
-        session = self._sessions.get(upload_id)
+        session = await self._ensure_session_loaded(upload_id)
         if not session or not session.is_ready_to_confirm:
             raise ValueError("Upload session has blocking validation errors or is not ready for import.")
 

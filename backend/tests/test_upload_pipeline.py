@@ -186,3 +186,110 @@ def test_end_to_end_upload_pipeline_and_auto_reconciliation():
     d_res = client.get("/api/datasets").json()
     datasets = d_res.get("datasets", d_res)
     assert any(d["dataset_id"] == c_data["dataset_id"] for d in datasets)
+
+
+# 8. Regression Test: Uploaded payments.csv must remain associated through mapping and validation
+def test_uploaded_payments_csv_must_remain_associated_through_mapping_and_validation():
+    # Test 1: Start fresh session
+    s_res = client.post("/api/upload/start")
+    assert s_res.status_code == 200
+    upload_id = s_res.json()["upload_id"]
+
+    # Test 2: Upload payments.csv with custom uppercase / variations
+    payments_csv = (
+        "PAYMENT_ID , AMOUNT , STATUS \n"
+        "PAY_TEST_001, 1500.00, SUCCESS\n"
+        "PAY_TEST_002, 2500.00, SUCCESS\n"
+    )
+    p_res = client.post(
+        f"/api/upload/{upload_id}/file",
+        data={"file_type": "payments"},
+        files={"file": ("payments.csv", io.BytesIO(payments_csv.encode("utf-8")), "text/csv")}
+    )
+    assert p_res.status_code == 200
+    assert p_res.json()["file_type"] == "payments"
+    assert p_res.json()["row_count"] == 2
+
+    # Verify session lookup contains payments
+    sess_res = client.get(f"/api/upload/{upload_id}/validation")
+    assert sess_res.status_code == 200
+    assert "payments" in sess_res.json()["files"]
+
+    # Test 3: Upload settlements.csv
+    settlements_csv = (
+        "settlement_id,payment_id,settlement_amount,settlement_status,settlement_date\n"
+        "SETTL_001,PAY_TEST_001,1467.00,SETTLED,2026-08-25T10:00:00Z\n"
+        "SETTL_002,PAY_TEST_002,2450.00,SETTLED,2026-08-25T11:00:00Z\n"
+    )
+    s_res = client.post(
+        f"/api/upload/{upload_id}/file",
+        data={"file_type": "settlements"},
+        files={"file": ("settlements.csv", io.BytesIO(settlements_csv.encode("utf-8")), "text/csv")}
+    )
+    assert s_res.status_code == 200
+
+    # Test 4: Upload refunds.csv
+    refunds_csv = (
+        "refund_id,payment_id,refund_amount,refund_status,refund_date\n"
+        "REF_001,PAY_TEST_001,100.00,PROCESSED,2026-08-26T10:00:00Z\n"
+    )
+    r_res = client.post(
+        f"/api/upload/{upload_id}/file",
+        data={"file_type": "refunds"},
+        files={"file": ("refunds.csv", io.BytesIO(refunds_csv.encode("utf-8")), "text/csv")}
+    )
+    assert r_res.status_code == 200
+
+    # Test 5: Upload fees.csv
+    fees_csv = (
+        "payment_id,fee_amount,tax_amount\n"
+        "PAY_TEST_001,25.00,4.50\n"
+        "PAY_TEST_002,40.00,7.20\n"
+    )
+    f_res = client.post(
+        f"/api/upload/{upload_id}/file",
+        data={"file_type": "fees"},
+        files={"file": ("fees.csv", io.BytesIO(fees_csv.encode("utf-8")), "text/csv")}
+    )
+    assert f_res.status_code == 200
+
+    # Test 6: Explicitly update column mappings for Payments
+    m_res = client.post(
+        f"/api/upload/{upload_id}/mapping",
+        json={
+            "file_type": "payments",
+            "mappings": {
+                "PAYMENT_ID": "payment_id",
+                "AMOUNT": "amount",
+                "STATUS": "payment_status"
+            }
+        }
+    )
+    assert m_res.status_code == 200
+
+    # Test 7: Verify all 4 files are present in session before validation
+    pre_val = client.get(f"/api/upload/{upload_id}/validation").json()
+    assert "payments" in pre_val["files"]
+    assert "settlements" in pre_val["files"]
+    assert "refunds" in pre_val["files"]
+    assert "fees" in pre_val["files"]
+
+    # Test 8: Run Data Validation - must succeed without "Payments file is required" error
+    val_res = client.post(f"/api/upload/{upload_id}/validate")
+    assert val_res.status_code == 200
+    val_data = val_res.json()
+    assert val_data["status"] == "READY"
+    assert val_data["is_ready_to_confirm"] is True
+    assert "payments" in val_data["validation_summaries"]
+    assert val_data["validation_summaries"]["payments"]["valid_rows"] == 2
+    assert val_data["validation_summaries"]["payments"]["error_count"] == 0
+
+    # Test 9: Confirm dataset creation
+    conf_res = client.post(
+        f"/api/upload/{upload_id}/confirm",
+        json={"dataset_name": "Regression Verified Dataset"}
+    )
+    assert conf_res.status_code == 200
+    assert conf_res.json()["success"] is True
+    assert conf_res.json()["status"] == "RECONCILED"
+

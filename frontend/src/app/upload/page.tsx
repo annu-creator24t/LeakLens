@@ -81,29 +81,37 @@ export default function UploadPage() {
 
   const initSession = async () => {
     setError(null);
+    setSession(null);
     try {
       const res = await startUploadSession();
       setUploadId(res.upload_id);
+      return res.upload_id;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to initialize upload session.");
+      return null;
     }
   };
 
   const handleFileUpload = async (fileType: string, file: File) => {
-    if (!uploadId) return;
+    let currentUploadId = uploadId;
+    if (!currentUploadId) {
+      currentUploadId = (await initSession()) || "";
+      if (!currentUploadId) return;
+    }
     setUploadingType(fileType);
     setError(null);
     try {
-      const info = await uploadSessionFile(uploadId, fileType, file);
+      const info = await uploadSessionFile(currentUploadId, fileType, file);
       setSession((prev) => {
-        const files = prev ? { ...prev.files, [fileType]: info } : { [fileType]: info };
+        const isSameSession = prev && prev.upload_id === currentUploadId;
+        const files = isSameSession ? { ...prev.files, [fileType]: info } : { [fileType]: info };
         return {
-          upload_id: uploadId,
+          upload_id: currentUploadId,
           status: "UPLOADING",
           files,
-          validation_summaries: prev?.validation_summaries || {},
-          issues: prev?.issues || [],
-          created_at: prev?.created_at || new Date().toISOString(),
+          validation_summaries: isSameSession ? prev.validation_summaries : {},
+          issues: isSameSession ? prev.issues : [],
+          created_at: isSameSession ? prev.created_at : new Date().toISOString(),
           updated_at: new Date().toISOString(),
           is_ready_to_confirm: false,
         };
@@ -118,6 +126,7 @@ export default function UploadPage() {
 
   const handleMappingChange = (fileType: string, srcCol: string, targetField: string) => {
     if (!session || !session.files[fileType]) return;
+    const activeUploadId = uploadId || session.upload_id;
     const fileInfo = session.files[fileType];
     const updatedMappings = fileInfo.column_mappings.map((m) =>
       m.source_column === srcCol
@@ -141,15 +150,27 @@ export default function UploadPage() {
       },
     });
 
-    updateColumnMappings(uploadId, fileType, mappingMap).catch(() => {});
+    if (activeUploadId) {
+      updateColumnMappings(activeUploadId, fileType, mappingMap).catch((err) => {
+        console.error("Failed to update column mapping:", err);
+      });
+    }
   };
 
   const handleRunValidation = async () => {
-    if (!uploadId) return;
+    const activeUploadId = uploadId || session?.upload_id;
+    if (!activeUploadId) {
+      setError("No active upload session. Please initialize a new session.");
+      return;
+    }
+    if (!session?.files["payments"]) {
+      setError("Payments file is required before running data validation.");
+      return;
+    }
     setValidating(true);
     setError(null);
     try {
-      const valState = await validateUploadSession(uploadId);
+      const valState = await validateUploadSession(activeUploadId);
       setSession(valState);
       setStep(3);
     } catch (err) {
@@ -160,11 +181,15 @@ export default function UploadPage() {
   };
 
   const handleConfirmImport = async () => {
-    if (!uploadId) return;
+    const activeUploadId = uploadId || session?.upload_id;
+    if (!activeUploadId) {
+      setError("No active upload session. Please initialize a new session.");
+      return;
+    }
     setConfirming(true);
     setError(null);
     try {
-      const res = await confirmAndImportDataset(uploadId, datasetName.trim() || undefined);
+      const res = await confirmAndImportDataset(activeUploadId, datasetName.trim() || undefined);
       setFinalResult(res);
       setStep(5);
       setSuccessBanner("Dataset imported.");
