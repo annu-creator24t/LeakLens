@@ -42,6 +42,8 @@ class DatabaseManager:
             self.db = self.client[settings.MONGODB_DB_NAME]
             self.is_connected = True
             logger.info(f"Connected to MongoDB database: '{settings.MONGODB_DB_NAME}'")
+            # Ensure indexes are established asynchronously
+            await self._ensure_indexes()
         except Exception as e:
             if settings.ENVIRONMENT.lower() == "production":
                 logger.error(f"MongoDB connection failed in production: {e}. Active fallback: in-memory state.")
@@ -49,6 +51,37 @@ class DatabaseManager:
                 logger.warning(f"MongoDB connection failed: {e}. Falling back to stateless local mode.")
             self.is_connected = False
             self.db = None
+
+    async def _ensure_indexes(self):
+        """Creates high-performance compound indexes for dataset-scoped querying and pagination."""
+        if self.db is None:
+            return
+        try:
+            # 1. Reconciliation Exceptions indexes
+            exc_coll = self.db["reconciliation_exceptions"]
+            await exc_coll.create_index([("dataset_id", 1), ("severity", 1)])
+            await exc_coll.create_index([("dataset_id", 1), ("primary_exception_type", 1)])
+            await exc_coll.create_index([("dataset_id", 1), ("status", 1)])
+            await exc_coll.create_index([("dataset_id", 1), ("exception_id", 1)], unique=True)
+            await exc_coll.create_index([("dataset_id", 1), ("payment_id", 1)])
+
+            # 2. Payments & Financial Transactions indexes
+            payments_coll = self.db["payments"]
+            await payments_coll.create_index([("dataset_id", 1), ("payment_id", 1)])
+            await payments_coll.create_index([("dataset_id", 1), ("payment_status", 1)])
+
+            # 3. Settlements, Refunds, Fees indexes
+            await self.db["settlements"].create_index([("dataset_id", 1), ("payment_id", 1)])
+            await self.db["refunds"].create_index([("dataset_id", 1), ("payment_id", 1)])
+            await self.db["fees"].create_index([("dataset_id", 1), ("payment_id", 1)])
+
+            # 4. Summaries & Upload sessions
+            await self.db["exception_summaries"].create_index([("dataset_id", 1)], unique=True)
+            await self.db["reconciliation_summaries"].create_index([("dataset_id", 1)], unique=True)
+            await self.db["upload_sessions"].create_index([("upload_id", 1)], unique=True)
+            logger.info("Successfully ensured MongoDB indexes for all financial collections.")
+        except Exception as e:
+            logger.warning(f"Index creation encountered a non-fatal warning: {e}")
 
     async def disconnect(self):
         """Closes the MongoDB connection."""
