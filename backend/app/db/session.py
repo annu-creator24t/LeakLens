@@ -75,10 +75,11 @@ class DatabaseManager:
             await self.db["refunds"].create_index([("dataset_id", 1), ("payment_id", 1)])
             await self.db["fees"].create_index([("dataset_id", 1), ("payment_id", 1)])
 
-            # 4. Summaries & Upload sessions
+            # 4. Summaries & Upload sessions & Audit events
             await self.db["exception_summaries"].create_index([("dataset_id", 1)], unique=True)
             await self.db["reconciliation_summaries"].create_index([("dataset_id", 1)], unique=True)
             await self.db["upload_sessions"].create_index([("upload_id", 1)], unique=True)
+            await self.db["investigation_audit_events"].create_index([("dataset_id", 1), ("action", 1)])
             logger.info("Successfully ensured MongoDB indexes for all financial collections.")
         except Exception as e:
             logger.warning(f"Index creation encountered a non-fatal warning: {e}")

@@ -149,16 +149,28 @@ class ReportGeneratorService:
         resolved_exc = act_summary.resolved
         resolution_rate = round((resolved_exc / total_exc * 100), 2) if total_exc > 0 else 100.0
 
-        # Fetch audit event counts
+        # Fetch audit event counts in single aggregation query
         db = db_manager.get_db()
         act_counts = {"started": 0, "notes": 0, "resolved": 0, "ignored": 0, "reopened": 0}
         if db is not None:
             c = db["investigation_audit_events"]
-            act_counts["started"] = await c.count_documents({"dataset_id": dataset_id, "action": "INVESTIGATION_STARTED"})
-            act_counts["notes"] = await c.count_documents({"dataset_id": dataset_id, "action": "NOTE_ADDED"})
-            act_counts["resolved"] = await c.count_documents({"dataset_id": dataset_id, "action": "RESOLVED"})
-            act_counts["ignored"] = await c.count_documents({"dataset_id": dataset_id, "action": "IGNORED"})
-            act_counts["reopened"] = await c.count_documents({"dataset_id": dataset_id, "action": "REOPENED"})
+            pipeline = [
+                {"$match": {"dataset_id": dataset_id}},
+                {"$group": {"_id": "$action", "count": {"$sum": 1}}}
+            ]
+            async for doc in c.aggregate(pipeline):
+                action_name = doc.get("_id", "")
+                cnt = doc.get("count", 0)
+                if action_name == "INVESTIGATION_STARTED":
+                    act_counts["started"] = cnt
+                elif action_name == "NOTE_ADDED":
+                    act_counts["notes"] = cnt
+                elif action_name == "RESOLVED":
+                    act_counts["resolved"] = cnt
+                elif action_name == "IGNORED":
+                    act_counts["ignored"] = cnt
+                elif action_name == "REOPENED":
+                    act_counts["reopened"] = cnt
 
         return ReportPreviewResponse(
             dataset_id=dataset_id,
