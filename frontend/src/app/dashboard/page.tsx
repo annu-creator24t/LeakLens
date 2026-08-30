@@ -79,24 +79,21 @@ function DashboardContent() {
       }
       setSummary(recSummary);
 
-      // 2. Fetch Exception Summary
-      try {
-        const eSummary = await fetchExceptionSummary(id);
-        setExcSummary(eSummary);
-      } catch {
-        // Handled
-      }
+      // 2. Fetch Exception Summary, Action Center Summary & Top Prioritized Issues concurrently
+      const [excRes, actRes, prioRes] = await Promise.allSettled([
+        fetchExceptionSummary(id),
+        fetchActionCenterSummary(id),
+        fetchPriorityQueue(id, { limit: 6 }),
+      ]);
 
-      // 3. Fetch Action Center Summary & Prioritized Issues
-      try {
-        const [actSum, prioQueue] = await Promise.all([
-          fetchActionCenterSummary(id),
-          fetchPriorityQueue(id, { limit: 6 }),
-        ]);
-        setActionSummary(actSum);
-        setTopExceptions(prioQueue.items);
-      } catch {
-        // Handled
+      if (excRes.status === "fulfilled") {
+        setExcSummary(excRes.value);
+      }
+      if (actRes.status === "fulfilled") {
+        setActionSummary(actRes.value);
+      }
+      if (prioRes.status === "fulfilled") {
+        setTopExceptions(prioRes.value.items);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong while loading this financial dataset.");
