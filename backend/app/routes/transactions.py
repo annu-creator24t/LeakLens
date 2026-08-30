@@ -61,25 +61,20 @@ async def list_available_datasets():
     return {"datasets": datasets}
 
 
-@router.get("/transactions/{dataset_id}")
-async def list_transactions(
-    dataset_id: str,
-    status_filter: Optional[str] = Query(None, alias="status"),
-    search: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
-    limit: int = Query(25, ge=1, le=500)
-):
-    """
-    Retrieves reconciled transaction list with expected vs actual settlements, differences, and statuses.
-    """
-    # Ensure reconciliation is run
+_transactions_cache: Dict[str, List[Dict[str, Any]]] = {}
+
+
+async def _get_or_build_reconciled_records(dataset_id: str) -> List[Dict[str, Any]]:
+    """Retrieves or precomputes reconciled transaction ledger with expected/actual amounts."""
+    if dataset_id in _transactions_cache:
+        return _transactions_cache[dataset_id]
+
     summary = await reconciliation_engine.get_summary(dataset_id)
     if not summary:
-        summary_resp = await reconciliation_engine.reconcile(dataset_id)
+        await reconciliation_engine.reconcile(dataset_id)
 
     payments, settlements, refunds, fees = await reconciliation_engine._fetch_all_records(dataset_id)
 
-    # Index lookups
     settlements_by_pid = {}
     for s in settlements:
         settlements_by_pid.setdefault(str(s["payment_id"]), []).append(s)
@@ -90,7 +85,6 @@ async def list_transactions(
 
     fees_by_pid = {str(f["payment_id"]): f for f in fees}
 
-    # Fetch exceptions to assign exception statuses
     exc_list, _ = await exception_detector.get_exceptions(dataset_id, limit=100000)
     exc_by_pid = {e["payment_id"]: e for e in exc_list if e.get("payment_id")}
 
@@ -144,6 +138,23 @@ async def list_transactions(
             "exception_id": exc_by_pid[pid]["exception_id"] if pid in exc_by_pid else None
         }
         records.append(rec)
+
+    _transactions_cache[dataset_id] = records
+    return records
+
+
+@router.get("/transactions/{dataset_id}")
+async def list_transactions(
+    dataset_id: str,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    search: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=500)
+):
+    """
+    Retrieves reconciled transaction list with expected vs actual settlements, differences, and statuses.
+    """
+    records = await _get_or_build_reconciled_records(dataset_id)
 
     # Filter
     filtered = records
