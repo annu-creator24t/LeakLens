@@ -258,25 +258,43 @@ class DataGeneratorService:
             return folder
         return None
 
-    def list_generated_datasets(self) -> Dict[str, Dict[str, Any]]:
-        """Scans disk & cache for existing generated benchmarks."""
+    def list_generated_datasets(self, limit: int = 50) -> Dict[str, Dict[str, Any]]:
+        """Scans disk & cache for existing generated benchmarks with incremental metadata caching."""
         datasets = {}
         for ds_id, data in self._cache.items():
             meta = data.get("metadata")
             datasets[ds_id] = meta.model_dump() if hasattr(meta, "model_dump") else meta
 
+        if not hasattr(self, "_disk_meta_cache"):
+            self._disk_meta_cache: Dict[str, Dict[str, Any]] = {}
+
         if os.path.exists(self.generated_dir):
-            for entry in os.listdir(self.generated_dir):
-                folder = os.path.join(self.generated_dir, entry)
-                if os.path.isdir(folder) and entry not in datasets:
-                    meta_path = os.path.join(folder, "metadata.json")
-                    if os.path.exists(meta_path):
-                        try:
-                            with open(meta_path, "r", encoding="utf-8") as f:
-                                datasets[entry] = json.load(f)
-                        except Exception:
-                            pass
+            # Only scan disk entries not already cached
+            try:
+                entries = os.listdir(self.generated_dir)
+                # Sort entries by name/timestamp descending to process newest first
+                entries.sort(reverse=True)
+                for entry in entries[:limit * 2]:
+                    if entry in datasets:
+                        continue
+                    if entry in self._disk_meta_cache:
+                        datasets[entry] = self._disk_meta_cache[entry]
+                        continue
+                    folder = os.path.join(self.generated_dir, entry)
+                    if os.path.isdir(folder):
+                        meta_path = os.path.join(folder, "metadata.json")
+                        if os.path.exists(meta_path):
+                            try:
+                                with open(meta_path, "r", encoding="utf-8") as f:
+                                    loaded = json.load(f)
+                                    self._disk_meta_cache[entry] = loaded
+                                    datasets[entry] = loaded
+                            except Exception:
+                                pass
+            except Exception:
+                pass
         return datasets
 
 
 data_generator = DataGeneratorService()
+
