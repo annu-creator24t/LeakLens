@@ -159,11 +159,66 @@ function DashboardContent() {
 
   if (loading && !summary) {
     return (
-      <LoadingState
-        message="Loading financial overview..."
-        subMessage="Reconciling captured payments against settled payouts"
-        size="lg"
-      />
+      <div className="space-y-8 animate-pulse" aria-busy="true" aria-label="Loading dashboard metrics">
+        {/* Header Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="h-7 w-64 rounded-lg bg-slate-800/80" />
+            <div className="h-4 w-96 rounded-lg bg-slate-800/50" />
+          </div>
+          <div className="h-9 w-32 rounded-lg bg-slate-800/60" />
+        </div>
+
+        {/* Hero Cards Skeleton */}
+        <div className="grid lg:grid-cols-12 gap-6 items-stretch">
+          <div className="lg:col-span-7 p-6 rounded-xl border border-slate-800/80 bg-[#0c121e] space-y-6">
+            <div className="flex justify-between items-center">
+              <div className="h-4 w-32 rounded bg-slate-800/60" />
+              <div className="h-5 w-40 rounded bg-slate-800/40" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-28 rounded bg-slate-800/40" />
+              <div className="h-10 w-52 rounded bg-slate-800/80" />
+            </div>
+            <div className="h-12 rounded-lg bg-slate-900/60" />
+          </div>
+          <div className="lg:col-span-5 p-6 rounded-xl border border-slate-800/80 bg-[#0c121e] space-y-6 flex flex-col justify-between">
+            <div className="flex justify-between items-center">
+              <div className="h-4 w-40 rounded bg-slate-800/60" />
+              <div className="h-5 w-16 rounded bg-slate-800/40" />
+            </div>
+            <div className="h-3 w-full rounded-full bg-slate-800/70 my-4" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-12 rounded-lg bg-slate-900/60" />
+              <div className="h-12 rounded-lg bg-slate-900/60" />
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Metric Cards Skeleton */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={`kpi-skel-${i}`} className="p-5 rounded-xl border border-slate-800/80 bg-[#0a0e17] space-y-3">
+              <div className="h-3 w-28 rounded bg-slate-800/60" />
+              <div className="h-7 w-36 rounded bg-slate-800/80" />
+              <div className="h-3 w-20 rounded bg-slate-800/40" />
+            </div>
+          ))}
+        </div>
+
+        {/* Priority Table Skeleton */}
+        <div className="rounded-xl border border-slate-800/80 bg-[#0a0e17] p-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <div className="h-5 w-48 rounded bg-slate-800/70" />
+            <div className="h-4 w-24 rounded bg-slate-800/40" />
+          </div>
+          <div className="space-y-3 pt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={`row-skel-${i}`} className="h-12 rounded-lg bg-slate-900/60" />
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
