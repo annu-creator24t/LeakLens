@@ -212,11 +212,45 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
 
   if (loading && !exception) {
     return (
-      <LoadingState
-        message="Loading exception details..."
-        subMessage="Extracting structured evidence ledger"
-        size="lg"
-      />
+      <div className="space-y-6 animate-pulse" aria-busy="true" aria-label="Loading exception details">
+        {/* Breadcrumb Skeleton */}
+        <div className="h-4 w-48 rounded bg-slate-800/60" />
+
+        {/* Top Brief Skeleton */}
+        <div className="p-6 rounded-xl border border-slate-800 bg-[#0c121e] space-y-4">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <div className="h-6 w-64 rounded bg-slate-800/80" />
+              <div className="h-4 w-32 rounded bg-slate-800/40" />
+            </div>
+            <div className="h-8 w-24 rounded bg-slate-800/60" />
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/60">
+            <div className="h-16 rounded-lg bg-slate-900/60" />
+            <div className="h-16 rounded-lg bg-slate-900/60" />
+            <div className="h-16 rounded-lg bg-slate-900/60" />
+          </div>
+        </div>
+
+        {/* Evidence Ledger Skeleton */}
+        <div className="p-6 rounded-xl border border-slate-800 bg-[#0c121e] space-y-4">
+          <div className="h-5 w-48 rounded bg-slate-800/70" />
+          <div className="space-y-3 pt-2">
+            <div className="h-12 rounded-lg bg-slate-900/60" />
+            <div className="h-12 rounded-lg bg-slate-900/60" />
+            <div className="h-12 rounded-lg bg-slate-900/60" />
+          </div>
+        </div>
+
+        {/* AI Investigation Skeleton */}
+        <div className="p-6 rounded-xl border border-blue-900/40 bg-[#0c1424] space-y-4">
+          <div className="h-6 w-52 rounded bg-blue-800/40" />
+          <div className="grid md:grid-cols-2 gap-4 pt-2">
+            <div className="h-32 rounded-lg bg-slate-900/60" />
+            <div className="h-32 rounded-lg bg-slate-900/60" />
+          </div>
+        </div>
+      </div>
     );
   }
 
