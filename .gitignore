@@ -53,6 +53,7 @@ data/generated/*
 !data/generated/.gitkeep
 data/uploads/*
 !data/uploads/.gitkeep
+data/test_pack/
 *.pdf
 scratch/
 
