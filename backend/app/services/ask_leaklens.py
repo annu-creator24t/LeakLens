@@ -30,12 +30,17 @@ class AskLeakLensService:
         # 1. Retrieve Conversation History / Context
         history = self._get_conversation_context(conv_id)
         last_context = history[-1] if history else None
+        prev_plan = last_context.query_plan if last_context and hasattr(last_context, "query_plan") and last_context.query_plan else {}
+        prev_pid = prev_plan.get("payment_id") if isinstance(prev_plan, dict) else None
 
         # 2. Query Planning
         plan_start = time.perf_counter()
         plan = query_planner.plan_query(
             question=question,
-            previous_context={"intent": last_context.intent} if last_context else None
+            previous_context={
+                "intent": last_context.intent if last_context else None,
+                "payment_id": prev_pid
+            } if last_context else None
         )
         plan_duration_ms = round((time.perf_counter() - plan_start) * 1000, 2)
 
@@ -127,7 +132,7 @@ class AskLeakLensService:
         if intent == AskIntent.FINANCIAL_DISCREPANCY:
             recon = data.get("reconciliation") or {}
             exc = data.get("exceptions") or {}
-            diff = recon.get("total_difference", exc.get("total_financial_impact", 0.0))
+            diff = recon.get("unexplained_difference", recon.get("total_difference", exc.get("total_financial_impact", 0.0)))
             exp_settle = recon.get("total_expected_settlement", 0.0)
             act_settle = recon.get("total_actual_settlement", 0.0)
             total_exc = exc.get("total_exceptions", 0)
@@ -158,9 +163,9 @@ class AskLeakLensService:
             recon = data.get("reconciliation") or {}
             exc = data.get("exceptions") or {}
             tx_count = recon.get("total_transactions", 0)
-            clean_count = recon.get("cleanly_reconciled_count", 0)
-            rate = recon.get("reconciliation_rate_percent", 100.0)
-            impact = exc.get("total_financial_impact", 0.0)
+            clean_count = recon.get("cleanly_reconciled_count", recon.get("matched_count", 0))
+            rate = recon.get("reconciliation_rate_percent", recon.get("reconciliation_rate", 100.0))
+            impact = exc.get("total_financial_impact", recon.get("unexplained_difference", 0.0))
             crit_count = exc.get("severity_breakdown", {}).get("CRITICAL", 0)
 
             return AskAIAnswer(
@@ -184,7 +189,6 @@ class AskLeakLensService:
         # 5. TOP_EXCEPTIONS
         if intent == AskIntent.TOP_EXCEPTIONS:
             items = data.get("items", [])
-            total = data.get("total_exceptions", 0)
             findings = []
             ev_items = []
             related_ids = []
@@ -192,8 +196,8 @@ class AskLeakLensService:
             for it in items:
                 eid = it.get("exception_id", "")
                 pid = it.get("payment_id", "")
-                etype = it.get("exception_type", "")
-                amt = it.get("amount_discrepancy", 0.0)
+                etype = it.get("exception_type", it.get("primary_exception_type", ""))
+                amt = it.get("amount_discrepancy", it.get("financial_impact", 0.0))
                 findings.append(f"{etype} on {pid or eid}: ₹{amt:,.2f} ({it.get('severity')})")
                 related_ids.append(eid)
                 ev_items.append(EvidenceItem(
@@ -203,21 +207,24 @@ class AskLeakLensService:
                     type="EXCEPTION"
                 ))
 
+            total_val = sum(it.get("amount_discrepancy", it.get("financial_impact", 0.0)) for it in items)
             return AskAIAnswer(
-                answer=f"Identified top {len(items)} prioritized exceptions totaling ₹{sum(it.get('amount_discrepancy', 0.0) for it in items):,.2f} in financial impact.",
+                answer=f"Identified top {len(items)} prioritized exceptions totaling ₹{total_val:,.2f} in financial impact.",
                 key_findings=findings,
                 evidence=ev_items,
                 related_exceptions=related_ids,
                 limitations=["Sorted deterministically by severity priority and discrepancy magnitude."]
             )
 
-        # 6. Specific Types (MISSING, DUPLICATE, REFUND, FEE, DELAYED)
+        # 6. Specific Types (MISSING, DUPLICATE, AMOUNT_MISMATCH, REFUND, FEE, DELAYED, ORPHAN)
         if intent in [
             AskIntent.MISSING_SETTLEMENTS,
             AskIntent.DUPLICATE_SETTLEMENTS,
+            AskIntent.AMOUNT_MISMATCHES,
             AskIntent.REFUND_ISSUES,
             AskIntent.FEE_ISSUES,
             AskIntent.DELAYED_SETTLEMENTS,
+            AskIntent.ORPHAN_SETTLEMENTS,
         ]:
             etype = data.get("exception_type", intent.value)
             count = data.get("count", 0)
@@ -240,7 +247,7 @@ class AskLeakLensService:
                 related_ids.append(eid)
                 ev_items.append(EvidenceItem(
                     label=pid or eid,
-                    value=f"₹{it.get('amount_discrepancy', 0.0):,.2f}",
+                    value=f"₹{it.get('amount_discrepancy', it.get('financial_impact', 0.0)):,.2f}",
                     link=f"/exceptions/{eid}?dataset_id={dataset_id}",
                     type="EXCEPTION"
                 ))
@@ -267,41 +274,56 @@ class AskLeakLensService:
             pay = data.get("payment") or {}
             pid = pay.get("payment_id", "")
             amt = pay.get("amount", "0.00")
-            status = pay.get("status", "UNKNOWN")
+            status = pay.get("status", pay.get("payment_status", "UNKNOWN"))
             settlements = data.get("settlements", [])
             exc = data.get("exception")
 
+            # Check if this is a follow-up action request
+            is_action_followup = "FOLLOW_UP_ACTION" in plan.extracted_terms or any(w in question.lower() for w in ["check next", "what next", "what to do", "how to resolve"])
+
             findings = [
                 f"Payment ID: {pid} (Order: {pay.get('order_id', 'N/A')})",
-                f"Gross Captured Amount: ₹{amt} ({status})",
+                f"Gross Captured Amount: ₹{float(amt):,.2f} ({status})",
                 f"Settlement records found: {len(settlements)}",
             ]
             if exc:
-                findings.append(f"Audit Flag: {exc.get('exception_type')} (Discrepancy: ₹{exc.get('amount_discrepancy', 0.0):,.2f})")
+                etype = exc.get("exception_type", exc.get("primary_exception_type", ""))
+                findings.append(f"Audit Flag: {etype} (Discrepancy: ₹{exc.get('amount_discrepancy', exc.get('financial_impact', 0.0)):,.2f})")
 
             ev = [
                 EvidenceItem(label="Payment ID", value=pid, link=f"/transactions/{pid}?dataset_id={dataset_id}", type="TRANSACTION"),
-                EvidenceItem(label="Gross Amount", value=f"₹{amt}"),
+                EvidenceItem(label="Gross Amount", value=f"₹{float(amt):,.2f}"),
                 EvidenceItem(label="Payment Status", value=status),
             ]
             if exc:
+                eid = exc.get("exception_id", "")
+                etype = exc.get("exception_type", exc.get("primary_exception_type", ""))
                 ev.append(EvidenceItem(
                     label="Exception Audit",
-                    value=exc.get("exception_type", ""),
-                    link=f"/exceptions/{exc.get('exception_id')}?dataset_id={dataset_id}",
+                    value=etype,
+                    link=f"/exceptions/{eid}?dataset_id={dataset_id}",
                     type="EXCEPTION"
                 ))
 
-            if exc:
-                exc_desc = f"Flagged as {exc.get('exception_type')}."
+            if is_action_followup:
+                if exc:
+                    etype = exc.get("exception_type", exc.get("primary_exception_type", ""))
+                    answer_text = f"For transaction {pid} (flagged as {etype}), recommended next steps: 1) Verify gateway settlement batch payout file, 2) Cross-reference refund receipts and contract MDR fees, 3) Open investigation in Action Center."
+                else:
+                    answer_text = f"Transaction {pid} has already been reconciled cleanly with full settlement credit. No further investigation action is required."
             else:
-                exc_desc = "Reconciled cleanly with zero settlement discrepancies."
+                if exc:
+                    etype = exc.get("exception_type", exc.get("primary_exception_type", ""))
+                    diff_amt = exc.get("amount_discrepancy", exc.get("financial_impact", 0.0))
+                    answer_text = f"Transaction {pid} was captured for ₹{float(amt):,.2f} ({status}) and is flagged with '{etype}' (Discrepancy: ₹{diff_amt:,.2f})."
+                else:
+                    answer_text = f"Transaction {pid} was captured for ₹{float(amt):,.2f} ({status}) and reconciled cleanly with zero settlement discrepancies."
 
             return AskAIAnswer(
-                answer=f"Transaction {pid} was captured for ₹{amt} with status '{status}'. {exc_desc}",
+                answer=answer_text,
                 key_findings=findings,
                 evidence=ev,
-                related_exceptions=[exc.get("exception_id")] if exc else [],
+                related_exceptions=[exc.get("exception_id")] if exc and exc.get("exception_id") else [],
                 limitations=[]
             )
 

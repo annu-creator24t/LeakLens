@@ -89,13 +89,15 @@ class QueryExecutorService:
                 "items": top_items
             }
 
-        # 6. Specific Exception Type Queries (MISSING, DUPLICATE, REFUND, FEE, DELAYED)
+        # 6. Specific Exception Type Queries (MISSING, DUPLICATE, AMOUNT_MISMATCH, REFUND, FEE, DELAYED, ORPHAN)
         type_mapping = {
             AskIntent.MISSING_SETTLEMENTS: "MISSING_SETTLEMENT",
             AskIntent.DUPLICATE_SETTLEMENTS: "DUPLICATE_SETTLEMENT",
+            AskIntent.AMOUNT_MISMATCHES: "AMOUNT_MISMATCH",
             AskIntent.REFUND_ISSUES: "REFUND_MISMATCH",
             AskIntent.FEE_ISSUES: "FEE_ANOMALY",
             AskIntent.DELAYED_SETTLEMENTS: "DELAYED_SETTLEMENT",
+            AskIntent.ORPHAN_SETTLEMENTS: "ORPHAN_SETTLEMENT",
         }
 
         if intent in type_mapping:
@@ -120,8 +122,8 @@ class QueryExecutorService:
             pid = plan.payment_id
             ord_id = plan.order_id
 
-            # Search in payments
-            payments = await dataset_service.get_records(dataset_id, "payments")
+            # Search in payments across memory / disk benchmark / MongoDB
+            payments, settlements_all, refunds_all, fees_all = await reconciliation_engine._fetch_all_records(dataset_id)
             target_payment = None
             if pid:
                 target_payment = next((p for p in payments if str(p.get("payment_id", "")).upper() == pid.upper()), None)
@@ -136,14 +138,14 @@ class QueryExecutorService:
                     "message": f"No transaction found with reference '{pid or ord_id}' in this dataset."
                 }
 
-            resolved_pid = target_payment.get("payment_id")
-            settlements = [s for s in await dataset_service.get_records(dataset_id, "settlements") if s.get("payment_id") == resolved_pid]
-            refunds = [r for r in await dataset_service.get_records(dataset_id, "refunds") if r.get("payment_id") == resolved_pid]
-            fees = next((f for f in await dataset_service.get_records(dataset_id, "fees") if f.get("payment_id") == resolved_pid), None)
+            resolved_pid = str(target_payment.get("payment_id"))
+            settlements = [s for s in settlements_all if str(s.get("payment_id")) == resolved_pid]
+            refunds = [r for r in refunds_all if str(r.get("payment_id")) == resolved_pid]
+            fees = next((f for f in fees_all if str(f.get("payment_id")) == resolved_pid), None)
 
             # Check if flagged as exception
             all_exceptions, _ = await exception_detector.get_exceptions(dataset_id=dataset_id, limit=10000)
-            matching_exc = next((e for e in all_exceptions if e.get("payment_id") == resolved_pid), None)
+            matching_exc = next((e for e in all_exceptions if str(e.get("payment_id")) == resolved_pid), None)
 
             return {
                 "type": "TRANSACTION_LOOKUP",
