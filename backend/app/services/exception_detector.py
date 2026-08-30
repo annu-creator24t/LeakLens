@@ -289,6 +289,10 @@ class ExceptionDetectionService:
             cache = data_generator._cache[dataset_id]
             return cache["payments"], cache["settlements"], cache["refunds"], cache["fees"]
 
+        disk_cache = data_generator.load_dataset_from_disk(dataset_id)
+        if disk_cache:
+            return disk_cache["payments"], disk_cache["settlements"], disk_cache["refunds"], disk_cache["fees"]
+
         p = await dataset_service.get_records(dataset_id, "payments")
         s = await dataset_service.get_records(dataset_id, "settlements")
         r = await dataset_service.get_records(dataset_id, "refunds")

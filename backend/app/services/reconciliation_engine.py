@@ -451,11 +451,16 @@ class ReconciliationEngine:
         }
 
     async def _fetch_all_records(self, dataset_id: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Retrieves raw records from database or in-memory generator cache."""
+        """Retrieves raw records from database, in-memory cache, or disk benchmark files."""
         # Check generator cache first if applicable
         if dataset_id in data_generator._cache:
             cache = data_generator._cache[dataset_id]
             return cache["payments"], cache["settlements"], cache["refunds"], cache["fees"]
+
+        # Check disk benchmark cache if present
+        disk_cache = data_generator.load_dataset_from_disk(dataset_id)
+        if disk_cache:
+            return disk_cache["payments"], disk_cache["settlements"], disk_cache["refunds"], disk_cache["fees"]
 
         # Fetch from dataset_service / MongoDB
         p = await dataset_service.get_records(dataset_id, "payments")

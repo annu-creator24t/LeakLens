@@ -258,6 +258,85 @@ class DataGeneratorService:
             return folder
         return None
 
+    def load_dataset_from_disk(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+        """Loads generated dataset CSV records from disk into cache if present."""
+        if dataset_id in self._cache:
+            return self._cache[dataset_id]
+
+        folder = self.get_dataset_folder(dataset_id)
+        if not folder:
+            return None
+
+        try:
+            payments, settlements, refunds, fees = [], [], [], []
+            
+            p_file = os.path.join(folder, "payments.csv")
+            if os.path.exists(p_file):
+                with open(p_file, "r", encoding="utf-8-sig") as f:
+                    for r in csv.DictReader(f):
+                        payments.append({
+                            "payment_id": r.get("payment_id", ""),
+                            "order_id": r.get("order_id", ""),
+                            "merchant_id": r.get("merchant_id", ""),
+                            "amount": to_decimal(r.get("amount", "0")),
+                            "currency": r.get("currency", "INR"),
+                            "payment_status": r.get("payment_status", "SUCCESS"),
+                            "payment_method": r.get("payment_method", "CARD"),
+                            "created_at": r.get("created_at", ""),
+                        })
+
+            s_file = os.path.join(folder, "settlements.csv")
+            if os.path.exists(s_file):
+                with open(s_file, "r", encoding="utf-8-sig") as f:
+                    for r in csv.DictReader(f):
+                        settlements.append({
+                            "settlement_id": r.get("settlement_id", ""),
+                            "payment_id": r.get("payment_id", ""),
+                            "settlement_amount": to_decimal(r.get("settlement_amount", "0")),
+                            "settlement_status": r.get("settlement_status", "SETTLED"),
+                            "settlement_date": r.get("settlement_date", ""),
+                        })
+
+            r_file = os.path.join(folder, "refunds.csv")
+            if os.path.exists(r_file):
+                with open(r_file, "r", encoding="utf-8-sig") as f:
+                    for r in csv.DictReader(f):
+                        refunds.append({
+                            "refund_id": r.get("refund_id", ""),
+                            "payment_id": r.get("payment_id", ""),
+                            "refund_amount": to_decimal(r.get("refund_amount", "0")),
+                            "refund_status": r.get("refund_status", "PROCESSED"),
+                            "refund_date": r.get("refund_date", ""),
+                        })
+
+            f_file = os.path.join(folder, "fees.csv")
+            if os.path.exists(f_file):
+                with open(f_file, "r", encoding="utf-8-sig") as f:
+                    for r in csv.DictReader(f):
+                        fees.append({
+                            "payment_id": r.get("payment_id", ""),
+                            "fee_amount": to_decimal(r.get("fee_amount", "0")),
+                            "tax_amount": to_decimal(r.get("tax_amount", "0")),
+                        })
+
+            meta_file = os.path.join(folder, "metadata.json")
+            meta = None
+            if os.path.exists(meta_file):
+                with open(meta_file, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+
+            cached_data = {
+                "payments": payments,
+                "settlements": settlements,
+                "refunds": refunds,
+                "fees": fees,
+                "metadata": meta
+            }
+            self._cache[dataset_id] = cached_data
+            return cached_data
+        except Exception:
+            return None
+
     def list_generated_datasets(self, limit: int = 50) -> Dict[str, Dict[str, Any]]:
         """Scans disk & cache for existing generated benchmarks with incremental metadata caching."""
         datasets = {}
