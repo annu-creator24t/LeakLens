@@ -211,11 +211,27 @@ function ReportsContent() {
 
       {/* Report Summary Preview Card */}
       {loading && !preview ? (
-        <LoadingState
-          message="Preparing financial report..."
-          subMessage="Extracting discrepancy metrics and ledger summary"
-          size="lg"
-        />
+        <div className="rounded-xl border border-slate-800 bg-[#0c121e] p-6 space-y-6 animate-pulse" aria-busy="true" aria-label="Loading report preview">
+          <div className="flex justify-between items-center pb-4 border-b border-slate-800/80">
+            <div className="space-y-2">
+              <div className="h-3 w-32 rounded bg-slate-800/60" />
+              <div className="h-6 w-64 rounded bg-slate-800/80" />
+            </div>
+            <div className="h-4 w-28 rounded bg-slate-800/40" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={`rep-kpi-${i}`} className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 space-y-2">
+                <div className="h-3 w-20 rounded bg-slate-800/60" />
+                <div className="h-6 w-28 rounded bg-slate-800/80" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3 pt-2">
+            <div className="h-10 rounded-lg bg-slate-900/60" />
+            <div className="h-10 rounded-lg bg-slate-900/60" />
+          </div>
+        </div>
       ) : preview ? (
         <div className="rounded-xl border border-slate-800 bg-[#0c121e] p-6 space-y-6">
           
