@@ -17,7 +17,13 @@ import {
   Clock,
   Sparkles,
   ShieldCheck,
-  Receipt
+  Receipt,
+  Layers,
+  ArrowUpRight,
+  ExternalLink,
+  ChevronRight,
+  Zap,
+  BarChart3
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -34,7 +40,6 @@ import {
 } from "@/lib/api";
 import { FinancialAmount } from "@/components/ui/FinancialAmount";
 import { SeverityBadge, StatusBadge } from "@/components/ui/Badges";
-import { MetricCard } from "@/components/ui/MetricCard";
 import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
@@ -110,7 +115,7 @@ function DashboardContent() {
         transaction_count: count,
         anomaly_rate: 0.05,
         seed: 12345,
-        merchant_id: "M001",
+        merchant_id: "MERCHANT_DEMO_01",
         anomalies: {
           missing_settlement: true,
           duplicate_settlement: true,
@@ -139,14 +144,14 @@ function DashboardContent() {
             <button
               type="button"
               onClick={() => handleCreateDemo(10000)}
-              className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer shadow-md"
             >
               <Activity className="w-4 h-4" />
               <span>Load 10k Benchmark Demo</span>
             </button>
             <Link
               href="/upload"
-              className="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2 transition-colors"
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2 transition-colors"
             >
               <FileSpreadsheet className="w-4 h-4 text-blue-400" />
               <span>Upload CSV Dataset</span>
@@ -171,7 +176,7 @@ function DashboardContent() {
 
         {/* Hero Cards Skeleton */}
         <div className="grid lg:grid-cols-12 gap-6 items-stretch">
-          <div className="lg:col-span-7 p-6 rounded-xl border border-slate-800/80 bg-[#0c121e] space-y-6">
+          <div className="lg:col-span-7 p-6 rounded-2xl border border-slate-800/80 bg-[#0c121e] space-y-6">
             <div className="flex justify-between items-center">
               <div className="h-4 w-32 rounded bg-slate-800/60" />
               <div className="h-5 w-40 rounded bg-slate-800/40" />
@@ -180,9 +185,9 @@ function DashboardContent() {
               <div className="h-3 w-28 rounded bg-slate-800/40" />
               <div className="h-10 w-52 rounded bg-slate-800/80" />
             </div>
-            <div className="h-12 rounded-lg bg-slate-900/60" />
+            <div className="h-14 rounded-xl bg-slate-900/60" />
           </div>
-          <div className="lg:col-span-5 p-6 rounded-xl border border-slate-800/80 bg-[#0c121e] space-y-6 flex flex-col justify-between">
+          <div className="lg:col-span-5 p-6 rounded-2xl border border-slate-800/80 bg-[#0c121e] space-y-6 flex flex-col justify-between">
             <div className="flex justify-between items-center">
               <div className="h-4 w-40 rounded bg-slate-800/60" />
               <div className="h-5 w-16 rounded bg-slate-800/40" />
@@ -195,26 +200,15 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* 4 Metric Cards Skeleton */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={`kpi-skel-${i}`} className="p-5 rounded-xl border border-slate-800/80 bg-[#0a0e17] space-y-3">
-              <div className="h-3 w-28 rounded bg-slate-800/60" />
-              <div className="h-7 w-36 rounded bg-slate-800/80" />
-              <div className="h-3 w-20 rounded bg-slate-800/40" />
-            </div>
-          ))}
-        </div>
-
         {/* Priority Table Skeleton */}
-        <div className="rounded-xl border border-slate-800/80 bg-[#0a0e17] p-6 space-y-4">
+        <div className="rounded-2xl border border-slate-800/80 bg-[#0a0e17] p-6 space-y-4">
           <div className="flex justify-between items-center">
             <div className="h-5 w-48 rounded bg-slate-800/70" />
             <div className="h-4 w-24 rounded bg-slate-800/40" />
           </div>
           <div className="space-y-3 pt-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={`row-skel-${i}`} className="h-12 rounded-lg bg-slate-900/60" />
+              <div key={`row-skel-${i}`} className="h-14 rounded-xl bg-slate-900/60" />
             ))}
           </div>
         </div>
@@ -229,33 +223,52 @@ function DashboardContent() {
   const openCount = actionSummary?.open ?? (summary?.exception_count ?? 0);
   const investigatingCount = actionSummary?.investigating ?? 0;
   const resolvedCount = actionSummary?.resolved ?? 0;
+  const matchedCount = summary?.matched_count ?? 0;
+  const totalVolume = summary?.total_transactions ?? 0;
 
   return (
     <div className="space-y-8">
       
-      {/* Header Info */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Active Dataset & Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800/80">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            Financial Health & Reconciliation
-          </h1>
-          <p className="text-slate-400 text-xs mt-0.5">
-            Deterministic matching across payment captures, deductions, refunds, and bank settlements.
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Financial Health & Reconciliation
+            </h1>
+            <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-blue-950/70 border border-blue-800/50 text-blue-300 flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              <span>Session: <strong className="font-semibold text-white">{datasetId}</strong></span>
+            </span>
+          </div>
+          <p className="text-slate-400 text-xs mt-1">
+            Deterministic Python Decimal matching across captures, fees, refunds, and bank settlements.
           </p>
         </div>
 
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => datasetId && loadDashboardData(datasetId)}
-          className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-2 transition-colors cursor-pointer self-start"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-400" : ""}`} />
-          <span>Refresh Overview</span>
-        </button>
+        <div className="flex items-center space-x-2.5 self-start md:self-auto">
+          <Link
+            href={`/investigate?dataset_id=${datasetId}`}
+            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Ask LeakLens</span>
+          </Link>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => datasetId && loadDashboardData(datasetId)}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer"
+            aria-label="Refresh financial overview"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-400" : ""}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      {/* Error State Banner */}
+      {/* Localized Error Banner */}
       {error && (
         <ErrorState
           message={error}
@@ -263,11 +276,11 @@ function DashboardContent() {
         />
       )}
 
-      {/* 1. HERO DASHBOARD SECTION: "How much money is unexplained?" */}
+      {/* 1. HERO FINANCIAL HIERARCHY: Primary Money Leakage & Status */}
       <div className="grid lg:grid-cols-12 gap-6 items-stretch">
         
-        {/* Main Hero Card */}
-        <div className="lg:col-span-7 p-6 rounded-xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6">
+        {/* Main Hero Card: Unexplained Amount */}
+        <div className="lg:col-span-7 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
@@ -275,72 +288,81 @@ function DashboardContent() {
                 FINANCIAL HEALTH
               </span>
             </div>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
-              {formatNumber(summary?.total_transactions)} Transactions Processed
+            <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+              {formatNumber(totalVolume)} Transactions Processed
             </span>
           </div>
 
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider block">
-              Unexplained Amount
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+              Unexplained Revenue Leakage
             </span>
-            <div className="pt-1">
+            <div className="pt-0.5">
               <FinancialAmount
                 amount={unexplainedAmount}
                 size="3xl"
                 variant={unexplainedAmount > 0 ? "danger" : "positive"}
               />
             </div>
-            <p className="text-xs text-slate-400 pt-1">
-              Net reconciliation difference between expected payout and actual settled bank funds.
+            <p className="text-xs text-slate-400 leading-relaxed pt-0.5">
+              Net reconciliation difference between expected settlement payouts and actual credited bank funds.
             </p>
           </div>
 
           {/* Issue Breakdown Bar */}
-          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-800/80">
-            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850">
+          <div className="grid grid-cols-3 gap-3 pt-3.5 border-t border-slate-800/80">
+            <Link
+              href={`/action-center?dataset_id=${datasetId}&status=OPEN`}
+              className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-850 hover:border-rose-900/60 hover:bg-rose-950/20 transition-all group"
+            >
               <span className="text-[10px] font-mono uppercase text-rose-400 block font-semibold">
                 Open Issues
               </span>
-              <span className="text-lg font-bold font-mono text-white">
+              <span className="text-lg font-bold font-mono text-white group-hover:text-rose-200">
                 {formatNumber(openCount)}
               </span>
-            </div>
+            </Link>
 
-            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850">
+            <Link
+              href={`/action-center?dataset_id=${datasetId}&status=INVESTIGATING`}
+              className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-850 hover:border-amber-900/60 hover:bg-amber-950/20 transition-all group"
+            >
               <span className="text-[10px] font-mono uppercase text-amber-400 block font-semibold">
                 Investigating
               </span>
-              <span className="text-lg font-bold font-mono text-white">
+              <span className="text-lg font-bold font-mono text-white group-hover:text-amber-200">
                 {formatNumber(investigatingCount)}
               </span>
-            </div>
+            </Link>
 
-            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850">
+            <Link
+              href={`/action-center?dataset_id=${datasetId}&status=RESOLVED`}
+              className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-850 hover:border-emerald-900/60 hover:bg-emerald-950/20 transition-all group"
+            >
               <span className="text-[10px] font-mono uppercase text-emerald-400 block font-semibold">
                 Resolved
               </span>
-              <span className="text-lg font-bold font-mono text-white">
+              <span className="text-lg font-bold font-mono text-white group-hover:text-emerald-200">
                 {formatNumber(resolvedCount)}
               </span>
-            </div>
+            </Link>
           </div>
         </div>
 
-        {/* 2. FINANCIAL HEALTH INDICATOR: "Why is it unexplained?" */}
-        <div className="lg:col-span-5 p-6 rounded-xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6">
+        {/* 2. LEDGER SETTLEMENT BREAKDOWN */}
+        <div className="lg:col-span-5 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-5 shadow-xl">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
-              Ledger Settlement Rate
+              Settlement Health Rate
             </span>
-            <span className="text-xs font-mono font-semibold text-emerald-400">
+            <span className="text-xs font-mono font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-950/50 border border-emerald-800/40">
               {recRate.toFixed(1)}% Matched
             </span>
           </div>
 
           {/* Visual Percentage Bar */}
-          <div className="space-y-3">
-            <div className="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+          <div className="space-y-2.5">
+            <div className="h-3.5 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
               <div
                 className="bg-emerald-500 transition-all duration-500"
                 style={{ width: `${Math.min(100, Math.max(0, recRate))}%` }}
@@ -356,26 +378,26 @@ function DashboardContent() {
             <div className="flex items-center justify-between text-xs font-mono text-slate-400">
               <div className="flex items-center space-x-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Reconciled: <strong className="text-slate-200">{recRate.toFixed(1)}%</strong></span>
+                <span>Reconciled: <strong className="text-slate-200">{formatNumber(matchedCount)} ({recRate.toFixed(1)}%)</strong></span>
               </div>
               <div className="flex items-center space-x-1.5">
                 <span className="w-2 h-2 rounded-full bg-rose-500" />
-                <span>Unreconciled: <strong className="text-slate-200">{unrecRate.toFixed(1)}%</strong></span>
+                <span>Exceptions: <strong className="text-slate-200">{formatNumber(summary?.exception_count)} ({unrecRate.toFixed(1)}%)</strong></span>
               </div>
             </div>
           </div>
 
-          {/* Settlement Totals */}
-          <div className="space-y-2 pt-2 border-t border-slate-800/80 text-xs">
-            <div className="flex justify-between text-slate-400">
+          {/* Settlement Totals Grid */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-800/80 text-xs">
+            <div className="flex justify-between items-center text-slate-400">
               <span>Expected Settlement:</span>
               <FinancialAmount amount={summary?.expected_settlement} size="sm" />
             </div>
-            <div className="flex justify-between text-slate-400">
+            <div className="flex justify-between items-center text-slate-400">
               <span>Actual Bank Payout:</span>
               <FinancialAmount amount={summary?.actual_settlement} size="sm" />
             </div>
-            <div className="flex justify-between text-slate-400 pt-1 border-t border-slate-850 font-semibold">
+            <div className="flex justify-between items-center text-slate-400 pt-1.5 border-t border-slate-850 font-semibold">
               <span className="text-rose-400">Unexplained Difference:</span>
               <FinancialAmount amount={summary?.unexplained_difference} size="sm" variant="danger" />
             </div>
@@ -384,10 +406,10 @@ function DashboardContent() {
           <div className="pt-1">
             <Link
               href={`/investigate?dataset_id=${datasetId}`}
-              className="w-full py-2 px-3 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 border border-blue-800/40 text-blue-300 text-xs font-semibold flex items-center justify-center space-x-2 transition-colors"
+              className="w-full py-2.5 px-3 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 border border-blue-800/40 text-blue-300 text-xs font-semibold flex items-center justify-center space-x-2 transition-colors cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              <span>Ask LeakLens About This Gap</span>
+              <span>Ask LeakLens Root Cause</span>
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </div>
@@ -395,18 +417,18 @@ function DashboardContent() {
 
       </div>
 
-      {/* 3. WHERE MONEY IS GETTING STUCK: "What should I investigate first?" */}
+      {/* 3. PRIORITY ACTION QUEUE: Where Money Is Getting Stuck */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
               <span>Where Money Is Getting Stuck</span>
               <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
-                Top Priority
+                Top Priority Queue
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              High-impact financial discrepancies prioritized for merchant dispute and investigation.
+              High-impact financial discrepancies sorted by severity and financial magnitude.
             </p>
           </div>
 
@@ -420,36 +442,38 @@ function DashboardContent() {
         </div>
 
         {/* Priority Table */}
-        <div className="rounded-xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-lg">
+        <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-lg">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th className="p-3.5 pl-5">Financial Issue</th>
-                  <th className="p-3.5">Payment ID</th>
-                  <th className="p-3.5">Financial Impact</th>
-                  <th className="p-3.5">Severity</th>
-                  <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Age / Date</th>
-                  <th className="p-3.5 text-right pr-5">Investigation</th>
+                  <th scope="col" className="p-3.5 pl-5">Financial Issue</th>
+                  <th scope="col" className="p-3.5">Payment Reference</th>
+                  <th scope="col" className="p-3.5">Financial Impact</th>
+                  <th scope="col" className="p-3.5">Severity</th>
+                  <th scope="col" className="p-3.5">Status</th>
+                  <th scope="col" className="p-3.5">Audit Timestamp</th>
+                  <th scope="col" className="p-3.5 text-right pr-5">Investigation</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {topExceptions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500 font-sans">
-                      No unresolved discrepancies found in this dataset session.
+                    <td colSpan={7} className="p-10 text-center text-slate-500 font-sans">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-60" />
+                      <p className="font-semibold text-slate-300">Clean Reconciliation</p>
+                      <p className="text-xs text-slate-500">No unresolved discrepancies found in this dataset session.</p>
                     </td>
                   </tr>
                 ) : (
                   topExceptions.map((item) => (
                     <tr
                       key={item.exception_id}
-                      className="hover:bg-slate-900/40 transition-colors group cursor-pointer"
+                      className="hover:bg-slate-900/50 transition-colors group cursor-pointer"
                       onClick={() => router.push(`/exceptions/${item.exception_id}?dataset_id=${datasetId}`)}
                     >
                       <td className="p-3.5 pl-5 font-sans">
-                        <div className="font-semibold text-slate-100">
+                        <div className="font-semibold text-slate-100 group-hover:text-blue-300 transition-colors">
                           {EXCEPTION_TITLES[item.exception_type] || item.exception_type}
                         </div>
                         <div className="text-[11px] font-mono text-slate-500 truncate max-w-xs">
@@ -458,7 +482,13 @@ function DashboardContent() {
                       </td>
 
                       <td className="p-3.5 text-slate-300">
-                        {item.payment_id || <span className="text-slate-600">N/A</span>}
+                        {item.payment_id ? (
+                          <span className="hover:text-blue-300 underline underline-offset-2">
+                            {item.payment_id}
+                          </span>
+                        ) : (
+                          <span className="text-slate-600">N/A</span>
+                        )}
                       </td>
 
                       <td className="p-3.5">
@@ -484,7 +514,7 @@ function DashboardContent() {
                       <td className="p-3.5 text-right pr-5">
                         <Link
                           href={`/exceptions/${item.exception_id}?dataset_id=${datasetId}`}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-blue-950/60 hover:bg-blue-900 text-blue-300 text-xs font-sans font-medium transition-colors"
+                          className="inline-flex items-center space-x-1 px-3 py-1 rounded-lg bg-blue-950/60 hover:bg-blue-900 text-blue-300 text-xs font-sans font-medium transition-colors border border-blue-800/40"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <span>Investigate</span>
