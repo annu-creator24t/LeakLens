@@ -19,7 +19,9 @@ import {
   User,
   Activity,
   ArrowRight,
-  Database
+  Database,
+  ExternalLink,
+  ChevronRight
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -124,6 +126,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   };
 
   const handleRunAIInvestigation = async (force: boolean = false) => {
+    if (aiLoading) return;
     setAiLoading(true);
     setAiError(null);
     try {
@@ -157,7 +160,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
     try {
       await addInvestigationNote(datasetId, exceptionId, noteInput.trim());
       setNoteInput("");
-      setSuccessBanner("Note saved.");
+      setSuccessBanner("Investigation note recorded.");
       await loadHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save note.");
@@ -173,11 +176,11 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
       if (modalType === "RESOLVE") {
         await resolveException(datasetId, exceptionId, note);
         setException((prev) => (prev ? { ...prev, status: "RESOLVED" } : null));
-        setSuccessBanner("Investigation resolved.");
+        setSuccessBanner("Investigation resolved successfully.");
       } else if (modalType === "IGNORE") {
         await ignoreException(datasetId, exceptionId, note);
         setException((prev) => (prev ? { ...prev, status: "IGNORED" } : null));
-        setSuccessBanner("Exception marked as ignored.");
+        setSuccessBanner("Exception marked as bypassed/ignored.");
       }
       setModalType(null);
       await loadHistory();
@@ -217,7 +220,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
         <div className="h-4 w-48 rounded bg-slate-800/60" />
 
         {/* Top Brief Skeleton */}
-        <div className="p-6 rounded-xl border border-slate-800 bg-[#0c121e] space-y-4">
+        <div className="p-6 rounded-2xl border border-slate-800 bg-[#0c121e] space-y-4">
           <div className="flex justify-between items-center">
             <div className="space-y-2">
               <div className="h-6 w-64 rounded bg-slate-800/80" />
@@ -226,28 +229,28 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
             <div className="h-8 w-24 rounded bg-slate-800/60" />
           </div>
           <div className="grid sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/60">
-            <div className="h-16 rounded-lg bg-slate-900/60" />
-            <div className="h-16 rounded-lg bg-slate-900/60" />
-            <div className="h-16 rounded-lg bg-slate-900/60" />
+            <div className="h-16 rounded-xl bg-slate-900/60" />
+            <div className="h-16 rounded-xl bg-slate-900/60" />
+            <div className="h-16 rounded-xl bg-slate-900/60" />
           </div>
         </div>
 
         {/* Evidence Ledger Skeleton */}
-        <div className="p-6 rounded-xl border border-slate-800 bg-[#0c121e] space-y-4">
+        <div className="p-6 rounded-2xl border border-slate-800 bg-[#0c121e] space-y-4">
           <div className="h-5 w-48 rounded bg-slate-800/70" />
           <div className="space-y-3 pt-2">
-            <div className="h-12 rounded-lg bg-slate-900/60" />
-            <div className="h-12 rounded-lg bg-slate-900/60" />
-            <div className="h-12 rounded-lg bg-slate-900/60" />
+            <div className="h-12 rounded-xl bg-slate-900/60" />
+            <div className="h-12 rounded-xl bg-slate-900/60" />
+            <div className="h-12 rounded-xl bg-slate-900/60" />
           </div>
         </div>
 
         {/* AI Investigation Skeleton */}
-        <div className="p-6 rounded-xl border border-blue-900/40 bg-[#0c1424] space-y-4">
+        <div className="p-6 rounded-2xl border border-blue-900/40 bg-[#0c1424] space-y-4">
           <div className="h-6 w-52 rounded bg-blue-800/40" />
           <div className="grid md:grid-cols-2 gap-4 pt-2">
-            <div className="h-32 rounded-lg bg-slate-900/60" />
-            <div className="h-32 rounded-lg bg-slate-900/60" />
+            <div className="h-32 rounded-xl bg-slate-900/60" />
+            <div className="h-32 rounded-xl bg-slate-900/60" />
           </div>
         </div>
       </div>
@@ -257,7 +260,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   if (!exception) {
     return (
       <ErrorState
-        message={error || "Exception record not found."}
+        message={error || "Exception record not found in this dataset session."}
         onRetry={loadDetail}
       />
     );
@@ -277,14 +280,14 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
 
   if (evidenceObj.payment_amount !== undefined) {
     evidenceFactList.push({
-      label: `Payment gross amount: ₹${Number(evidenceObj.payment_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+      label: `Payment gross captured: ₹${Number(evidenceObj.payment_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
       verified: true,
     });
   }
 
   if (exception.expected_settlement !== undefined) {
     evidenceFactList.push({
-      label: `Calculated expected settlement: ₹${Number(exception.expected_settlement).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+      label: `Expected net payout: ₹${Number(exception.expected_settlement).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
       verified: true,
       detail: "Gross minus contracted fee & refund deductions",
     });
@@ -316,8 +319,8 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   const possibleCausesList = aiOutput?.possible_causes?.length
     ? aiOutput.possible_causes
     : [
-        "Settlement batch may not yet have been processed by the acquiring bank.",
-        "Gateway deduction rules or tax reconciliation may differ from contract.",
+        "Settlement batch may not yet have been credited by the acquiring gateway.",
+        "Gateway deduction rules or tax withholding may differ from contracted MDR.",
         "Payout window may have breached standard T+2 settlement SLA.",
       ];
 
@@ -342,7 +345,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
     },
     {
       title: "02. GATEWAY SETTLEMENT",
-      subtitle: evidenceObj.settlement_found === false ? "Settlement Search" : "Settlement Processing",
+      subtitle: evidenceObj.settlement_found === false ? "Settlement Batch Search" : "Settlement Processing",
       amount: Number(evidenceObj.settlement_amount || 0),
       status: evidenceObj.settlement_found === false ? "NOT FOUND" : `ACTUAL ₹${Number(evidenceObj.settlement_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
       statusType: evidenceObj.settlement_found === false ? "danger" : "warning",
@@ -366,15 +369,19 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
 
   const breadcrumbItems = [
     { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
-    { label: "Exceptions", href: `/exceptions?dataset_id=${datasetId}` },
+    { label: "Exceptions Queue", href: `/exceptions?dataset_id=${datasetId}` },
     { label: exception.payment_id || exception.exception_id, isCurrent: true },
   ];
+
+  const isResolved = exception.status === "RESOLVED";
+  const isIgnored = exception.status === "IGNORED";
+  const isInvestigating = exception.status === "INVESTIGATING" || exception.status === "UNDER_REVIEW";
 
   return (
     <div className="space-y-8">
       
       {/* Breadcrumbs & Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <Breadcrumbs items={breadcrumbItems} />
 
         <Link
@@ -388,7 +395,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
 
       {/* Success Notification Banner */}
       {successBanner && (
-        <div className="p-3.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-xs text-emerald-300 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-xs text-emerald-300 flex items-center justify-between shadow-md">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{successBanner}</span>
@@ -396,14 +403,14 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
           <button
             type="button"
             onClick={() => setSuccessBanner(null)}
-            className="text-slate-400 hover:text-white text-xs font-mono"
+            className="text-slate-400 hover:text-white text-xs font-mono cursor-pointer"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* 1. INVESTIGATION BRIEF: Reusable Component in the First Viewport */}
+      {/* 1. INVESTIGATION BRIEF: Top Hero Section */}
       <InvestigationBrief
         exceptionType={exception.exception_type}
         exceptionTitle={EXCEPTION_TITLES[exception.exception_type] || exception.exception_type}
@@ -420,72 +427,89 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
         actionLoading={actionLoading}
       />
 
-      {/* 2. CAUSAL EVIDENCE LEDGER */}
-      <div className="rounded-xl border border-slate-800 bg-[#0c121e] p-6 space-y-4">
+      {/* 2. DETERMINISTIC FINANCIAL COMPARISON & CAUSAL EVIDENCE LEDGER */}
+      <div className="rounded-2xl border border-slate-800 bg-[#0c121e] p-6 space-y-5 shadow-xl">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight flex items-center space-x-2">
+              <Receipt className="w-4 h-4 text-blue-400" />
+              <span>Deterministic Reconciliation Chain</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Step-by-step mathematical comparison from payment capture through gateway settlement.
+            </p>
+          </div>
+          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400">
+            Verified Ledger Truth
+          </span>
+        </div>
+
         <EvidenceLedger steps={causalSteps} />
       </div>
 
-      {/* 3. AI INVESTIGATION: Evidence-Grounded Analysis */}
-      <div className="rounded-xl border border-blue-900/40 bg-[#0c1424] p-6 space-y-6">
+      {/* 3. AI INVESTIGATION: Evidence-Grounded Root Cause */}
+      <div className="rounded-2xl border border-blue-900/40 bg-[#0c1424] p-6 space-y-6 shadow-xl">
         
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-blue-900/40">
           <div>
-            <div className="flex items-center space-x-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-400">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-sm">
                 <Sparkles className="w-4 h-4" />
               </div>
               <h3 className="text-base font-bold text-white tracking-tight">
-                AI INVESTIGATION
+                AI ROOT-CAUSE INVESTIGATOR
               </h3>
             </div>
             <p className="text-xs text-blue-300/80 mt-0.5">
-              Evidence-grounded analysis synthesized strictly from verified ledger facts.
+              Evidence-grounded causal synthesis strictly reasoned over confirmed ledger facts (zero math in prompts).
             </p>
           </div>
 
-          {/* AI Trust Indicator */}
-          <div className="flex items-center space-x-3">
-            <span className="text-xs font-mono px-3 py-1 rounded-md bg-blue-950/80 border border-blue-800/60 text-blue-300 font-semibold flex items-center space-x-1.5">
+          {/* AI Trust & Trigger Button */}
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-mono px-3 py-1.5 rounded-xl bg-blue-950/80 border border-blue-800/60 text-blue-300 font-semibold flex items-center space-x-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Based on {evidenceFactList.length} verified ledger facts</span>
+              <span>{evidenceFactList.length} Verified Ledger Facts</span>
             </span>
 
             <button
               type="button"
               disabled={aiLoading}
               onClick={() => handleRunAIInvestigation(true)}
-              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-md"
             >
-              <Sparkles className={`w-3 h-3 ${aiLoading ? "animate-spin" : ""}`} />
+              <Sparkles className={`w-3.5 h-3.5 ${aiLoading ? "animate-spin" : ""}`} />
               <span>{aiLoading ? "Investigating..." : aiData ? "Re-analyze Evidence" : "Run AI Investigation"}</span>
             </button>
           </div>
         </div>
 
         {aiError && (
-          <div className="p-3.5 rounded-lg bg-rose-950/40 border border-rose-900/50 text-xs text-rose-300">
+          <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-900/50 text-xs text-rose-300">
             {aiError}
           </div>
         )}
 
-        {/* Distinguish CONFIRMED facts from POSSIBLE CAUSES */}
+        {/* Distinct CONFIRMED Facts vs POSSIBLE CAUSES */}
         <div className="grid md:grid-cols-2 gap-6">
           
           {/* CONFIRMED Facts */}
-          <div className="space-y-3 p-4 rounded-lg bg-slate-950/60 border border-slate-800">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 p-4 rounded-xl bg-slate-950/70 border border-slate-800">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-850">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400 flex items-center space-x-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>CONFIRMED FACTS</span>
+                <span>CONFIRMED LEDGER FACTS</span>
               </span>
-              <span className="text-[10px] font-mono text-slate-500">Deterministic Truth</span>
+              <span className="text-[10px] font-mono text-emerald-500/80 px-2 py-0.5 rounded bg-emerald-950/50 border border-emerald-900/40">
+                100% Deterministic
+              </span>
             </div>
 
             <div className="space-y-2 text-xs text-slate-300">
               {evidenceFactList.map((fact, fIdx) => (
                 <div key={fIdx} className="flex items-start space-x-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-emerald-400 font-bold shrink-0">✓</span>
                   <span>{fact.label}</span>
                 </div>
               ))}
@@ -493,19 +517,21 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
           </div>
 
           {/* POSSIBLE CAUSES (Hypotheses) */}
-          <div className="space-y-3 p-4 rounded-lg bg-slate-950/60 border border-slate-800">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 p-4 rounded-xl bg-slate-950/70 border border-slate-800">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-850">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center space-x-1.5">
                 <HelpCircle className="w-3.5 h-3.5" />
-                <span>POSSIBLE CAUSES</span>
+                <span>POSSIBLE ROOT CAUSES</span>
               </span>
-              <span className="text-[10px] font-mono text-slate-500">AI Hypothesis</span>
+              <span className="text-[10px] font-mono text-amber-500/80 px-2 py-0.5 rounded bg-amber-950/50 border border-amber-900/40">
+                AI Hypotheses
+              </span>
             </div>
 
             <div className="space-y-2 text-xs text-slate-300">
               {possibleCausesList.map((cause, cIdx) => (
                 <div key={cIdx} className="flex items-start space-x-2">
-                  <span className="text-amber-400 font-bold">•</span>
+                  <span className="text-amber-400 font-bold shrink-0">•</span>
                   <span>{cause}</span>
                 </div>
               ))}
@@ -520,24 +546,24 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
       <div className="grid lg:grid-cols-12 gap-6">
         
         {/* Investigation Notes */}
-        <div className="lg:col-span-6 p-6 rounded-xl border border-slate-800 bg-[#0c121e] space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="lg:col-span-6 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] space-y-4 shadow-xl">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <h3 className="text-sm font-bold text-white tracking-tight flex items-center space-x-2">
               <MessageSquare className="w-4 h-4 text-blue-400" />
               <span>Investigation Notes</span>
             </h3>
-            <span className="text-xs font-mono text-slate-500">{notes.length} Recorded</span>
+            <span className="text-xs font-mono text-slate-400">{notes.length} Recorded</span>
           </div>
 
           {/* Notes list */}
           <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
             {notes.length === 0 ? (
-              <p className="text-xs text-slate-500 font-mono p-4 text-center rounded bg-slate-950/40">
-                No investigation notes added yet.
+              <p className="text-xs text-slate-500 font-mono p-4 text-center rounded-xl bg-slate-950/40">
+                No investigation notes added yet. Record auditor notes below.
               </p>
             ) : (
               notes.map((n) => (
-                <div key={n.note_id} className="p-3 rounded-lg bg-slate-950/60 border border-slate-850 space-y-1 text-xs">
+                <div key={n.note_id} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-850 space-y-1 text-xs">
                   <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span className="font-semibold text-slate-300">{n.actor}</span>
                     <span className="font-mono">{formatDate(n.created_at)}</span>
@@ -555,38 +581,39 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
               value={noteInput}
               onChange={(e) => setNoteInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSaveNote()}
-              placeholder="Add an investigation note..."
-              className="flex-1 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-blue-500 transition-colors"
+              placeholder="Record auditor note..."
+              className="flex-1 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-blue-500 transition-colors font-mono"
             />
             <button
               type="button"
               disabled={savingNote || !noteInput.trim()}
               onClick={handleSaveNote}
-              className="p-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors cursor-pointer"
+              aria-label="Submit investigation note"
             >
               <Send className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Audit Timeline */}
-        <div className="lg:col-span-6 p-6 rounded-xl border border-slate-800 bg-[#0c121e] space-y-4">
-          <div className="flex items-center justify-between">
+        {/* Immutable Audit Timeline */}
+        <div className="lg:col-span-6 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] space-y-4 shadow-xl">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <h3 className="text-sm font-bold text-white tracking-tight flex items-center space-x-2">
               <Clock className="w-4 h-4 text-emerald-400" />
               <span>Immutable Audit Timeline</span>
             </h3>
-            <span className="text-xs font-mono text-slate-500">{auditEvents.length} Events</span>
+            <span className="text-xs font-mono text-slate-400">{auditEvents.length} Events</span>
           </div>
 
           <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
             {auditEvents.length === 0 ? (
-              <p className="text-xs text-slate-500 font-mono p-4 text-center rounded bg-slate-950/40">
-                No audit events recorded.
+              <p className="text-xs text-slate-500 font-mono p-4 text-center rounded-xl bg-slate-950/40">
+                No audit events recorded yet.
               </p>
             ) : (
               auditEvents.map((evt) => (
-                <div key={evt.audit_id} className="p-3 rounded-lg bg-slate-950/60 border border-slate-850 space-y-1 text-xs">
+                <div key={evt.audit_id} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-850 space-y-1 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs font-semibold text-blue-400">
                       {evt.action.replace(/_/g, " ")}
@@ -595,9 +622,9 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
                       {formatDate(evt.created_at)}
                     </span>
                   </div>
-                  <div className="flex items-center space-x-2 text-[11px] text-slate-400">
+                  <div className="flex items-center space-x-2 text-[11px] text-slate-400 font-mono">
                     <span>{evt.previous_status}</span>
-                    <span>→</span>
+                    <ChevronRight className="w-3 h-3 text-slate-600" />
                     <span className="text-emerald-400 font-semibold">{evt.new_status}</span>
                     <span className="text-slate-600">•</span>
                     <span className="text-slate-400">{evt.actor}</span>
@@ -611,13 +638,69 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
 
       </div>
 
+      {/* Lifecycle Actions Bar at the bottom */}
+      <div className="p-4 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-wrap items-center justify-between gap-4 shadow-md">
+        <div className="flex items-center space-x-3 text-xs">
+          <span className="text-slate-400 font-mono">Current Status:</span>
+          <StatusBadge status={exception.status} size="md" />
+        </div>
+
+        <div className="flex items-center space-x-3">
+          {(isResolved || isIgnored) && (
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={handleReopen}
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reopen Discrepancy</span>
+            </button>
+          )}
+
+          {!isResolved && !isIgnored && !isInvestigating && (
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={handleStartInvestigation}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Start Investigation</span>
+            </button>
+          )}
+
+          {!isResolved && !isIgnored && (
+            <>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setModalType("RESOLVE")}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Resolve Discrepancy</span>
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setModalType("IGNORE")}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800 text-xs font-medium transition-colors cursor-pointer"
+              >
+                <span>Bypass</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Confirmation Dialog for Resolution / Ignore */}
       <ConfirmDialog
         isOpen={modalType !== null}
         title={modalType === "RESOLVE" ? "Mark this issue as resolved?" : "Ignore this exception?"}
         description={
           modalType === "RESOLVE"
-            ? "Record a mandatory audit note explaining how this discrepancy was cleared or settled."
+            ? "Record a mandatory audit note explaining how this discrepancy was cleared or settled with the bank/gateway."
             : "Record an audit note explaining why this exception is bypassed."
         }
         confirmLabel={modalType === "RESOLVE" ? "Resolve Issue" : "Ignore Exception"}
