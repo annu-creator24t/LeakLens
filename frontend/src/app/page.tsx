@@ -128,7 +128,7 @@ export default function LandingPage() {
       <header className="border-b border-slate-800/80 bg-[#080b11]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold tracking-tight text-sm shadow-[0_0_15px_rgba(37,99,235,0.3)]">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold tracking-tight text-sm shadow-sm">
               LL
             </div>
             <span className="font-bold tracking-tight text-base text-white">LEAKLENS</span>
@@ -141,7 +141,7 @@ export default function LandingPage() {
             <button
               onClick={handleTryLeakLens}
               disabled={isStartingDemo}
-              className="text-xs text-blue-300 hover:text-white font-semibold transition-all border border-blue-800/60 px-3 py-1.5 rounded-lg bg-blue-950/50 hover:bg-blue-900/60 flex items-center space-x-1.5 cursor-pointer shadow-[0_0_12px_rgba(37,99,235,0.15)]"
+              className="text-xs text-blue-300 hover:text-white font-semibold transition-all border border-blue-800/60 px-3 py-1.5 rounded-lg bg-blue-950/50 hover:bg-blue-900/60 flex items-center space-x-1.5 cursor-pointer shadow-sm"
             >
               {isStartingDemo ? (
                 <>
@@ -172,7 +172,7 @@ export default function LandingPage() {
 
             {/* Backend Health Badge */}
             <div className="hidden md:flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800">
-              <span className={`w-2 h-2 rounded-full ${backendHealth?.status === "ok" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+              <span className={`w-2 h-2 rounded-full ${backendHealth?.status === "ok" ? "bg-emerald-500" : "bg-amber-500"}`} />
               <span className="text-slate-400">
                 Backend: {backendHealth?.status === "ok" ? "Operational" : "Checking..."}
               </span>
@@ -198,16 +198,16 @@ export default function LandingPage() {
           {/* Left Column: Hero Copy & Actions */}
           <div className="lg:col-span-7 space-y-7">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-950/60 border border-blue-800/50 text-blue-300">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <span>Razorpay AI Buildathon — Track 04: AI Finance Controller</span>
             </div>
 
             <div className="space-y-4">
               <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1]">
-                Find Where Your Money Doesn&apos;t Reconcile.
+                Deterministic Financial Reconciliation & Leakage Detection.
               </h1>
               <p className="text-sm sm:text-base lg:text-lg text-slate-400 max-w-xl leading-relaxed">
-                LeakLens reconciles payments, settlements, refunds, and fees across millions in volume. Detect silent revenue leaks with deterministic mathematical precision and grounded AI root-cause analysis.
+                LeakLens reconciles payment captures, bank settlements, customer refunds, and gateway fees with 0% float drift. Detect unexplained discrepancies and investigate root causes using evidence-grounded AI.
               </p>
             </div>
 
@@ -216,7 +216,7 @@ export default function LandingPage() {
               <button
                 onClick={handleTryLeakLens}
                 disabled={isStartingDemo}
-                className="px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm flex items-center space-x-2.5 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.45)] cursor-pointer"
+                className="px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm flex items-center space-x-2.5 transition-all shadow-md cursor-pointer"
               >
                 {isStartingDemo ? (
                   <>
@@ -271,17 +271,17 @@ export default function LandingPage() {
           <div className="lg:col-span-5">
             <div 
               onClick={handleTryLeakLens}
-              className="rounded-2xl border border-slate-800 bg-[#0c121e] p-6 shadow-2xl space-y-5 relative overflow-hidden group hover:border-blue-700/60 transition-all cursor-pointer"
+              className="rounded-2xl border border-slate-800 bg-[#0c121e] p-6 shadow-xl space-y-5 relative overflow-hidden group hover:border-blue-700/60 transition-all cursor-pointer"
             >
               <div className="flex items-center justify-between pb-3.5 border-b border-slate-800/80">
                 <div className="flex items-center space-x-2">
                   <Activity className="w-4 h-4 text-blue-400" />
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Live Discrepancy Snapshot
+                    Reconciliation Snapshot
                   </span>
                 </div>
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
-                  10K Demo Dataset
+                  10K Benchmark Dataset
                 </span>
               </div>
 
@@ -290,7 +290,7 @@ export default function LandingPage() {
                 <div className="flex items-center justify-between text-xs text-rose-400 font-medium">
                   <span className="flex items-center space-x-1.5">
                     <TrendingDown className="w-3.5 h-3.5 shrink-0" />
-                    <span>Unexplained Revenue Leakage</span>
+                    <span>Unexplained Difference</span>
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-rose-900/60 text-rose-300 font-mono font-semibold">
                     CRITICAL SEVERITY
@@ -316,7 +316,7 @@ export default function LandingPage() {
                 </div>
                 <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
                   <span className="text-[10px] uppercase font-mono text-slate-400 block">
-                    Actual Bank Payout
+                    Actual Settlement
                   </span>
                   <div className="font-mono text-sm font-semibold text-slate-200">
                     ₹74,10,500.00

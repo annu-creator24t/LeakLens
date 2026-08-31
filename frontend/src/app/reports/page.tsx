@@ -273,7 +273,7 @@ function ReportsContent() {
 
             <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850">
               <span className="text-[10px] font-mono uppercase text-slate-400 block">
-                Expected Payout
+                Expected Settlement
               </span>
               <div className="pt-1">
                 <FinancialAmount amount={preview.financial_overview.expected_settlement} size="lg" />
@@ -282,7 +282,7 @@ function ReportsContent() {
 
             <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850">
               <span className="text-[10px] font-mono uppercase text-slate-400 block">
-                Actual Bank Payout
+                Actual Settlement
               </span>
               <div className="pt-1">
                 <FinancialAmount amount={preview.financial_overview.actual_settlement} size="lg" />

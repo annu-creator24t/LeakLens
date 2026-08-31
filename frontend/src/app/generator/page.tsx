@@ -17,6 +17,8 @@ import {
   Play,
   FileCheck
 } from "lucide-react";
+import AppShell from "@/components/layout/AppShell";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { generateSyntheticDataset, getDownloadUrl, GeneratorResponse } from "@/lib/api";
 
 export default function GeneratorPage() {
@@ -72,51 +74,31 @@ export default function GeneratorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080b11] text-slate-100 flex flex-col justify-between fintech-grid">
-      {/* Top Header */}
-      <header className="border-b border-slate-800/80 bg-[#080b11]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link
-              href="/"
-              className="flex items-center space-x-2 text-slate-400 hover:text-white transition-colors text-xs font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Home</span>
-            </Link>
-            <div className="h-4 w-px bg-slate-800" />
-            <div className="flex items-center space-x-2">
-              <span className="font-semibold text-white tracking-tight">LEAKLENS</span>
-              <span className="text-slate-500">/</span>
-              <span className="text-slate-300 text-sm font-medium">Synthetic Dataset Generator</span>
-            </div>
-          </div>
+    <AppShell>
+      <div className="space-y-6">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: "Overview", href: "/dashboard" },
+            { label: "Synthetic Benchmark Generator", isCurrent: true },
+          ]}
+        />
 
-          <div className="flex items-center space-x-3">
-            <Link
-              href="/upload"
-              className="text-xs text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700 bg-slate-900 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Go to Uploader →
-            </Link>
-            <div className="text-xs text-blue-400 font-mono px-2.5 py-1 rounded bg-blue-950/60 border border-blue-800/50">
-              Developer Benchmark Tool
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-10 flex-1 w-full space-y-8">
-        
         {/* Page Hero */}
-        <div className="pb-6 border-b border-slate-800/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="pb-2 border-b border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
-              <span>Synthetic Financial Benchmark Generator</span>
-              <Sparkles className="w-5 h-5 text-blue-400" />
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                <Cpu className="w-4 h-4" />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                Synthetic Benchmark Generator
+              </h1>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950/60 border border-blue-800/60 text-blue-300">
+                Deterministic Engine
+              </span>
+            </div>
+            <p className="text-slate-400 text-xs mt-1">
               Generate 100 to 100,000+ deterministic transactions with known injected anomalies and ground-truth labels for objective evaluation.
             </p>
           </div>
@@ -381,13 +363,7 @@ export default function GeneratorPage() {
           </div>
 
         </div>
-
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>© 2026 LeakLens. Razorpay AI Buildathon — Track 04: AI Finance Controller. Phase 3 Generator.</p>
-      </footer>
-    </div>
+      </div>
+    </AppShell>
   );
 }

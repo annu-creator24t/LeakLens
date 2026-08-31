@@ -237,7 +237,7 @@ function DashboardContent() {
               Financial Health & Reconciliation
             </h1>
             <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-blue-950/70 border border-blue-800/50 text-blue-300 flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
               <span>Session: <strong className="font-semibold text-white">{datasetId}</strong></span>
             </span>
           </div>
@@ -283,7 +283,7 @@ function DashboardContent() {
         <div className="lg:col-span-7 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+              <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
               <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
                 FINANCIAL HEALTH
               </span>
@@ -295,7 +295,7 @@ function DashboardContent() {
 
           <div className="space-y-1.5">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-              Unexplained Revenue Leakage
+              Unexplained Difference
             </span>
             <div className="pt-0.5">
               <FinancialAmount
@@ -316,7 +316,7 @@ function DashboardContent() {
               className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-850 hover:border-rose-900/60 hover:bg-rose-950/20 transition-all group"
             >
               <span className="text-[10px] font-mono uppercase text-rose-400 block font-semibold">
-                Open Issues
+                Open Discrepancies
               </span>
               <span className="text-lg font-bold font-mono text-white group-hover:text-rose-200">
                 {formatNumber(openCount)}
@@ -394,7 +394,7 @@ function DashboardContent() {
               <FinancialAmount amount={summary?.expected_settlement} size="sm" />
             </div>
             <div className="flex justify-between items-center text-slate-400">
-              <span>Actual Bank Payout:</span>
+              <span>Actual Settlement:</span>
               <FinancialAmount amount={summary?.actual_settlement} size="sm" />
             </div>
             <div className="flex justify-between items-center text-slate-400 pt-1.5 border-t border-slate-850 font-semibold">
@@ -417,12 +417,12 @@ function DashboardContent() {
 
       </div>
 
-      {/* 3. PRIORITY ACTION QUEUE: Where Money Is Getting Stuck */}
+      {/* 3. PRIORITY ACTION QUEUE: High-Impact Financial Discrepancies */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
-              <span>Where Money Is Getting Stuck</span>
+              <span>High-Impact Financial Discrepancies</span>
               <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
                 Top Priority Queue
               </span>

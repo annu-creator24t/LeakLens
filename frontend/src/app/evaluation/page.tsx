@@ -16,7 +16,10 @@ import {
   Database,
   Cpu,
 } from "lucide-react";
+import AppShell from "@/components/layout/AppShell";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { runEvaluation, generateSyntheticDataset, EvaluationResponse } from "@/lib/api";
+import { LoadingState } from "@/components/ui/FeedbackStates";
 
 const TYPE_NAMES: Record<string, string> = {
   MISSING_SETTLEMENT: "Missing Settlement",
@@ -87,20 +90,28 @@ function EvaluationView() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 flex-1 w-full space-y-8">
+    <div className="space-y-6">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: "Overview", href: datasetId ? `/dashboard?dataset_id=${datasetId}` : "/dashboard" },
+          { label: "Ground Truth Benchmark Evaluation", isCurrent: true },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800/80">
         <div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
               <span>Ground Truth Benchmark Evaluator</span>
               <ShieldCheck className="w-5 h-5 text-emerald-400" />
             </h1>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-300">
-              Developer Only
+              Deterministic Verification
             </span>
           </div>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-400 text-xs mt-1">
             Audits deterministic exception detection against controlled synthetic ground-truth labels.
           </p>
         </div>
@@ -110,7 +121,7 @@ function EvaluationView() {
             type="button"
             disabled={loading}
             onClick={() => handleRunPreset(1000)}
-            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm"
           >
             <Activity className="w-3.5 h-3.5 text-blue-400" />
             <span>1k Preset Benchmark</span>
@@ -119,7 +130,7 @@ function EvaluationView() {
             type="button"
             disabled={loading}
             onClick={() => handleRunPreset(10000)}
-            className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center space-x-1.5 transition-all shadow-[0_0_15px_rgba(16,185,129,0.25)] cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center space-x-1.5 transition-all cursor-pointer shadow-sm"
           >
             <Award className="w-3.5 h-3.5" />
             <span>10k Official Benchmark</span>
@@ -266,49 +277,10 @@ function EvaluationView() {
 
 export default function EvaluationPage() {
   return (
-    <div className="min-h-screen bg-[#080b11] text-slate-100 flex flex-col justify-between fintech-grid">
-      <header className="border-b border-slate-800/80 bg-[#080b11]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link
-              href="/reconciliation"
-              className="flex items-center space-x-2 text-slate-400 hover:text-white transition-colors text-xs font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Reconciliation</span>
-            </Link>
-            <div className="h-4 w-px bg-slate-800" />
-            <div className="flex items-center space-x-2">
-              <span className="font-semibold text-white tracking-tight">LEAKLENS</span>
-              <span className="text-slate-500">/</span>
-              <span className="text-slate-300 text-sm font-medium">Evaluation Benchmark</span>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <Link
-              href="/generator"
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors border border-blue-900/50 px-3 py-1.5 rounded-lg bg-blue-950/40"
-            >
-              Generator
-            </Link>
-            <Link
-              href="/reconciliation"
-              className="text-xs text-slate-400 hover:text-white border border-slate-800 bg-slate-900 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Dashboard
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <Suspense fallback={<div className="text-center py-20 text-slate-500">Loading Benchmark Evaluator...</div>}>
+    <AppShell>
+      <Suspense fallback={<LoadingState message="Loading Benchmark Evaluator..." />}>
         <EvaluationView />
       </Suspense>
-
-      <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>© 2026 LeakLens. Razorpay AI Buildathon — Track 04. Phase 5 Deterministic Evaluation.</p>
-      </footer>
-    </div>
+    </AppShell>
   );
 }

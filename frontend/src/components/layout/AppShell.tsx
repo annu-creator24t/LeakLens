@@ -119,7 +119,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           {/* Logo Brand */}
           <div className="p-5 border-b border-slate-800/80">
             <Link href="/" className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold tracking-tight shadow-[0_0_15px_rgba(37,99,235,0.3)]">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold tracking-tight text-sm shadow-sm">
                 LL
               </div>
               <div>
@@ -268,8 +268,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
             {/* Demo dataset active pill */}
             {isDemoActive && (
-              <span className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider font-semibold bg-amber-950/50 text-amber-300 border border-amber-800/50">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider font-semibold bg-amber-950/50 text-amber-300 border border-amber-800/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                 <span>DEMO DATA</span>
               </span>
             )}

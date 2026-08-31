@@ -154,13 +154,13 @@ function TransactionDetailContent({ paymentId }: { paymentId: string }) {
           </div>
 
           <div className="p-3 rounded-lg bg-blue-950/30 border border-blue-900/40 space-y-1">
-            <span className="text-blue-400 text-[10px] uppercase block">Expected Net</span>
+            <span className="text-blue-400 text-[10px] uppercase block">Expected Settlement</span>
             <FinancialAmount amount={detail.calculation.expected_settlement} size="base" variant="neutral" />
           </div>
         </div>
 
         <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-850 flex items-center justify-between text-xs font-mono">
-          <span className="text-slate-400">Actual Bank Credit Recorded:</span>
+          <span className="text-slate-400">Actual Settlement Recorded:</span>
           <FinancialAmount amount={detail.calculation.actual_settlement} size="base" variant="neutral" />
         </div>
       </div>

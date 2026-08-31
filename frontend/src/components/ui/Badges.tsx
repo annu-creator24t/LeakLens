@@ -84,14 +84,14 @@ export function StatusBadge({ status, size = "sm" }: StatusBadgeProps) {
       text: "text-amber-400",
       border: "border-amber-800/50",
       label: "Investigating",
-      dot: "bg-amber-500 animate-pulse",
+      dot: "bg-amber-500",
     },
     UNDER_REVIEW: {
       bg: "bg-amber-950/40",
       text: "text-amber-400",
       border: "border-amber-800/50",
       label: "Investigating",
-      dot: "bg-amber-500 animate-pulse",
+      dot: "bg-amber-500",
     },
     RESOLVED: {
       bg: "bg-emerald-950/40",

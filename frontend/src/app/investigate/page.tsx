@@ -173,7 +173,7 @@ function InvestigateContent() {
               <Sparkles className="w-4 h-4" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Ask Your Financial Ledger
+              Financial Ledger Investigation
             </h1>
             <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400">
               Session: <strong className="text-slate-200">{datasetId}</strong>
