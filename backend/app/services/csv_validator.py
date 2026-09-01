@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Tuple, Set
 from app.schemas.upload import ValidationErrorItem, ValidationSummary
 from app.utils.validation import (
     SCHEMA_COLUMNS,
+    OPTIONAL_SCHEMA_COLUMNS,
     PRIMARY_KEYS,
     ALLOWED_PAYMENT_STATUSES,
     ALLOWED_SETTLEMENT_STATUSES,
@@ -41,6 +42,7 @@ class CSVValidatorService:
         # 1. Column header validation
         header_set = set(headers)
         expected_set = set(expected_columns)
+        optional_set = OPTIONAL_SCHEMA_COLUMNS.get(file_type, set())
 
         missing_cols = expected_set - header_set
         if missing_cols:
@@ -51,7 +53,7 @@ class CSVValidatorService:
                 message=f"Missing required columns: {', '.join(sorted(missing_cols))}."
             ))
 
-        unexpected_cols = header_set - expected_set
+        unexpected_cols = header_set - expected_set - optional_set
         if unexpected_cols:
             errors.append(ValidationErrorItem(
                 row=1,

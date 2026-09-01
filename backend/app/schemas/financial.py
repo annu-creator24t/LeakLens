@@ -19,6 +19,8 @@ class SettlementStatus(str, Enum):
 
 class RefundStatus(str, Enum):
     PROCESSED = "PROCESSED"
+    COMPLETED = "COMPLETED"
+    REFUNDED = "REFUNDED"
     PENDING = "PENDING"
     FAILED = "FAILED"
 

@@ -73,9 +73,12 @@ const SCHEMA_TARGET_FIELDS: Record<string, SchemaFieldOption[]> = {
     { key: "refund_date", label: "Refund Date", isRequired: true },
   ],
   fees: [
+    { key: "fee_id", label: "Fee ID", isRequired: false },
     { key: "payment_id", label: "Payment ID", isRequired: true },
     { key: "fee_amount", label: "Fee Amount", isRequired: true },
     { key: "tax_amount", label: "Tax Amount", isRequired: false },
+    { key: "fee_type", label: "Fee Type", isRequired: false },
+    { key: "fee_date", label: "Fee Date", isRequired: false },
   ],
 };
 

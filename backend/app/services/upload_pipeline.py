@@ -69,9 +69,12 @@ COLUMN_VARIATIONS = {
         "refund_date": ["refund_date", "date", "refunded_at", "refund_time"],
     },
     "fees": {
+        "fee_id": ["fee_id", "id", "fee_ref", "fee_reference", "fee_number", "fee_code"],
         "payment_id": ["payment_id", "txn_id", "transaction_id", "reference_id"],
-        "fee_amount": ["fee_amount", "fee", "mdr", "fee_deducted", "charge", "processing_fee"],
+        "fee_amount": ["fee_amount", "amount", "mdr", "fee_deducted", "charge", "processing_fee", "fee_charged", "total_fee"],
         "tax_amount": ["tax_amount", "tax", "gst", "vat", "service_tax"],
+        "fee_type": ["fee_type", "type", "fee_category", "category"],
+        "fee_date": ["fee_date", "date", "created_at", "timestamp"],
     }
 }
 
@@ -235,44 +238,60 @@ class UploadPipelineService:
         return info
 
     def _detect_mappings(self, file_type: str, headers: List[str]) -> List[ColumnMappingItem]:
-        """Matches source columns against canonical targets with confidence scores."""
+        """Matches source columns against canonical targets with confidence scores using multi-pass resolution."""
         target_dict = COLUMN_VARIATIONS.get(file_type, {})
         req_list = REQUIRED_FIELDS.get(file_type, [])
-        items: List[ColumnMappingItem] = []
 
-        used_targets = set()
+        matched_targets: Dict[int, tuple[str, float]] = {}  # col_idx -> (target_field, confidence)
+        used_targets: set[str] = set()
 
-        for col in headers:
-            col_clean = re.sub(r"[^a-zA-Z0-9_]", "", col.lower().replace(" ", "_"))
-            matched_target = None
-            best_conf = 0.0
+        cleaned_headers = [
+            (idx, col, re.sub(r"[^a-zA-Z0-9_]", "", col.lower().replace(" ", "_")))
+            for idx, col in enumerate(headers)
+        ]
 
+        # Pass 1: Exact target field name match
+        for idx, col, col_clean in cleaned_headers:
+            if col_clean in target_dict and col_clean not in used_targets:
+                matched_targets[idx] = (col_clean, 1.0)
+                used_targets.add(col_clean)
+
+        # Pass 2: Exact synonym match
+        for idx, col, col_clean in cleaned_headers:
+            if idx in matched_targets:
+                continue
             for target_field, synonyms in target_dict.items():
                 if target_field in used_targets:
                     continue
-
-                if col_clean == target_field:
-                    matched_target = target_field
-                    best_conf = 1.0
+                if col_clean in synonyms:
+                    matched_targets[idx] = (target_field, 0.95)
+                    used_targets.add(target_field)
                     break
-                elif col_clean in synonyms:
-                    matched_target = target_field
-                    best_conf = 0.95
-                    break
-                elif any(s in col_clean for s in synonyms):
-                    matched_target = target_field
-                    best_conf = 0.75
 
-            if matched_target:
-                used_targets.add(matched_target)
-                is_req = matched_target in req_list
+        # Pass 3: Token boundary matching
+        for idx, col, col_clean in cleaned_headers:
+            if idx in matched_targets:
+                continue
+            tokens = set(col_clean.split("_"))
+            for target_field, synonyms in target_dict.items():
+                if target_field in used_targets:
+                    continue
+                if any(s in tokens or col_clean == f"{s}_amount" or col_clean == f"amount_{s}" for s in synonyms if len(s) > 2):
+                    matched_targets[idx] = (target_field, 0.80)
+                    used_targets.add(target_field)
+                    break
+
+        items: List[ColumnMappingItem] = []
+        for idx, col, _ in cleaned_headers:
+            if idx in matched_targets:
+                target_field, conf = matched_targets[idx]
                 items.append(ColumnMappingItem(
                     source_column=col,
-                    target_field=matched_target,
-                    confidence=best_conf,
-                    is_required=is_req,
+                    target_field=target_field,
+                    confidence=conf,
+                    is_required=target_field in req_list,
                     is_mapped=True,
-                    alternatives=[k for k in target_dict.keys() if k != matched_target]
+                    alternatives=[k for k in target_dict.keys() if k != target_field]
                 ))
             else:
                 items.append(ColumnMappingItem(

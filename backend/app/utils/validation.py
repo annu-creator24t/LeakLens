@@ -8,7 +8,7 @@ ALLOWED_FILE_EXTENSIONS: Set[str] = {".csv"}
 # Allowed statuses
 ALLOWED_PAYMENT_STATUSES: Set[str] = {"SUCCESS", "FAILED", "PENDING", "CANCELLED", "CAPTURED"}
 ALLOWED_SETTLEMENT_STATUSES: Set[str] = {"SETTLED", "PENDING", "FAILED"}
-ALLOWED_REFUND_STATUSES: Set[str] = {"PROCESSED", "PENDING", "FAILED", "REFUNDED"}
+ALLOWED_REFUND_STATUSES: Set[str] = {"PROCESSED", "COMPLETED", "REFUNDED", "PENDING", "FAILED"}
 
 # Supported currencies
 ALLOWED_CURRENCIES: Set[str] = {"INR", "USD", "EUR", "GBP", "SGD", "AED"}
@@ -44,6 +44,13 @@ SCHEMA_COLUMNS = {
         "fee_amount",
         "tax_amount",
     ],
+}
+
+OPTIONAL_SCHEMA_COLUMNS = {
+    "payments": set(),
+    "settlements": set(),
+    "refunds": set(),
+    "fees": {"fee_id", "fee_type", "fee_date"},
 }
 
 PRIMARY_KEYS = {
