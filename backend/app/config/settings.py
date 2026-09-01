@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     PORT: Optional[int] = None  # Support Render / Cloud dynamic $PORT
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
-    ALLOW_ORIGIN_REGEX: Optional[str] = None  # e.g., r"https://.*\.vercel\.app"
+    ALLOWED_ORIGINS: str = "https://leak-lens-roan.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+    ALLOW_ORIGIN_REGEX: Optional[str] = r"^https:\/\/.*\.vercel\.app$"
     
     # Database
     MONGODB_URI: Optional[str] = None
@@ -40,9 +40,18 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> List[str]:
+        base_origins = [
+            "https://leak-lens-roan.vercel.app",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
         if not self.ALLOWED_ORIGINS:
-            return []
-        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+            return base_origins
+        configured = [origin.strip().rstrip("/") for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+        for origin in base_origins:
+            if origin not in configured:
+                configured.append(origin)
+        return configured
 
 
 settings = Settings()

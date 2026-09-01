@@ -1075,7 +1075,10 @@ export async function confirmAndImportDataset(
 export async function fetchDatasetsList(): Promise<DatasetListItem[]> {
   const res = await fetch(`${API_BASE_URL}/api/datasets`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to fetch datasets: ${res.status}`);
-  return await res.json();
+  const data = await res.json();
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.datasets)) return data.datasets;
+  return [];
 }
 
 export async function deleteDataset(datasetId: string): Promise<any> {

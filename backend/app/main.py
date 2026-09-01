@@ -58,6 +58,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -83,6 +84,15 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/api/health"
+    }
+
+
+@app.get("/health")
+async def health():
+    """Root health endpoint alias."""
+    return {
+        "status": "ok",
+        "service": "leaklens-backend"
     }
 
 
