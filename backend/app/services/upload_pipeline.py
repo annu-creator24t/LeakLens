@@ -22,6 +22,12 @@ from app.schemas.upload_pipeline import (
     DatasetListItem,
 )
 from app.utils.money import to_decimal
+from app.utils.validation import (
+    ALLOWED_PAYMENT_STATUSES,
+    ALLOWED_SETTLEMENT_STATUSES,
+    ALLOWED_REFUND_STATUSES,
+    ALLOWED_CURRENCIES,
+)
 from app.services.dataset_service import dataset_service
 from app.services.reconciliation_engine import reconciliation_engine
 from app.services.exception_detector import exception_detector
@@ -337,7 +343,8 @@ class UploadPipelineService:
             v_summary, records, f_issues = self._process_file_rows(
                 ftype=ftype,
                 file_bytes=f_bytes,
-                mappings={m.source_column: m.target_field for m in finfo.column_mappings if m.target_field}
+                mappings={m.source_column: m.target_field for m in finfo.column_mappings if m.target_field},
+                original_filename=finfo.original_filename
             )
             summaries[ftype] = v_summary
             parsed_records[ftype] = records
@@ -348,18 +355,21 @@ class UploadPipelineService:
         payment_pids = {str(r.get("payment_id")) for r in parsed_records.get("payments", []) if r.get("payment_id")}
 
         for ftype in ["settlements", "refunds", "fees"]:
+            fname = session.files.get(ftype).original_filename if ftype in session.files else f"{ftype}.csv"
             for idx, r in enumerate(parsed_records.get(ftype, []), start=2):
                 pid = str(r.get("payment_id", ""))
                 if pid and pid not in payment_pids:
                     issue = ValidationIssue(
                         issue_id=f"iss_{uuid.uuid4().hex[:8]}",
                         file_type=ftype,
+                        file_name=fname,
                         row_number=idx,
                         column="payment_id",
                         code="ORPHAN_REFERENCE",
                         severity=IssueSeverity.WARNING,
                         message=f"{ftype.capitalize()} references uncaptured Payment ID '{pid}'. Flagged as potential anomaly.",
-                        raw_value=pid
+                        raw_value=pid,
+                        expected="Valid captured Payment ID present in payments.csv"
                     )
                     all_issues.append(issue)
                     summaries[ftype].warning_count += 1
@@ -379,9 +389,11 @@ class UploadPipelineService:
         self,
         ftype: str,
         file_bytes: bytes,
-        mappings: Dict[str, str]
+        mappings: Dict[str, str],
+        original_filename: str = ""
     ) -> Tuple[FileValidationSummary, List[Dict[str, Any]], List[ValidationIssue]]:
         """Parses and validates individual file rows into canonical normalized records."""
+        file_name = original_filename or f"{ftype}.csv"
         text = file_bytes.decode("utf-8-sig", errors="replace")
         reader = csv.DictReader(io.StringIO(text))
 
@@ -404,32 +416,37 @@ class UploadPipelineService:
                 if target:
                     mapped_row[target] = val.strip() if val else ""
 
-            # Check ID
+            # Check primary identifier
             id_key = f"{ftype[:-1]}_id" if ftype != "fees" else "payment_id"
             record_id = mapped_row.get(id_key)
             if not record_id:
                 issue = ValidationIssue(
                     issue_id=f"iss_{uuid.uuid4().hex[:8]}",
                     file_type=ftype,
+                    file_name=file_name,
                     row_number=row_num,
                     column=id_key,
                     code="MISSING_ID",
                     severity=IssueSeverity.ERROR,
-                    message=f"Missing required identifier '{id_key}'."
+                    message=f"Missing required identifier '{id_key}'.",
+                    raw_value="",
+                    expected=f"Non-empty unique string (e.g. {id_key.upper()}_001)"
                 )
                 issues.append(issue)
                 error_count += 1
                 row_has_error = True
-            elif ftype == "payments" and record_id in seen_ids:
+            elif record_id in seen_ids:
                 issue = ValidationIssue(
                     issue_id=f"iss_{uuid.uuid4().hex[:8]}",
                     file_type=ftype,
+                    file_name=file_name,
                     row_number=row_num,
-                    column="payment_id",
-                    code="DUPLICATE_PAYMENT_ID",
+                    column=id_key,
+                    code=f"DUPLICATE_{id_key.upper()}",
                     severity=IssueSeverity.ERROR,
-                    message=f"Duplicate Payment ID '{record_id}' detected.",
-                    raw_value=record_id
+                    message=f"Duplicate {id_key} '{record_id}' detected.",
+                    raw_value=record_id,
+                    expected=f"Unique '{id_key}' per row"
                 )
                 issues.append(issue)
                 error_count += 1
@@ -437,22 +454,41 @@ class UploadPipelineService:
             else:
                 seen_ids.add(record_id)
 
-            # Amount Normalization
+            # Amount Normalization & Validation
             amt_key = "amount" if ftype == "payments" else f"{ftype[:-1]}_amount"
             if amt_key in mapped_row:
                 raw_amt = mapped_row[amt_key]
+                allow_zero = ftype in ["fees", "settlements"]
                 try:
                     dec_amt = to_decimal(raw_amt)
                     if dec_amt < Decimal("0.00"):
                         issue = ValidationIssue(
                             issue_id=f"iss_{uuid.uuid4().hex[:8]}",
                             file_type=ftype,
+                            file_name=file_name,
                             row_number=row_num,
                             column=amt_key,
                             code="NEGATIVE_AMOUNT",
                             severity=IssueSeverity.ERROR,
                             message=f"Negative monetary amount '{raw_amt}' not allowed.",
-                            raw_value=raw_amt
+                            raw_value=raw_amt,
+                            expected="Non-negative decimal monetary value >= 0.00 (e.g. 1500.00)"
+                        )
+                        issues.append(issue)
+                        error_count += 1
+                        row_has_error = True
+                    elif not allow_zero and dec_amt == Decimal("0.00"):
+                        issue = ValidationIssue(
+                            issue_id=f"iss_{uuid.uuid4().hex[:8]}",
+                            file_type=ftype,
+                            file_name=file_name,
+                            row_number=row_num,
+                            column=amt_key,
+                            code="NON_POSITIVE_AMOUNT",
+                            severity=IssueSeverity.ERROR,
+                            message=f"Monetary amount '{raw_amt}' must be greater than zero.",
+                            raw_value=raw_amt,
+                            expected="Positive decimal monetary value > 0.00 (e.g. 1500.00)"
                         )
                         issues.append(issue)
                         error_count += 1
@@ -463,18 +499,82 @@ class UploadPipelineService:
                     issue = ValidationIssue(
                         issue_id=f"iss_{uuid.uuid4().hex[:8]}",
                         file_type=ftype,
+                        file_name=file_name,
                         row_number=row_num,
                         column=amt_key,
                         code="INVALID_AMOUNT",
                         severity=IssueSeverity.ERROR,
                         message=f"Invalid monetary format '{raw_amt}'.",
-                        raw_value=raw_amt
+                        raw_value=raw_amt,
+                        expected="Valid numeric monetary value (e.g. 1500.00)"
                     )
                     issues.append(issue)
                     error_count += 1
                     row_has_error = True
 
-            # Date Normalization
+            # Tax Amount for Fees
+            if ftype == "fees" and "tax_amount" in mapped_row and mapped_row["tax_amount"]:
+                raw_tax = mapped_row["tax_amount"]
+                try:
+                    dec_tax = to_decimal(raw_tax)
+                    if dec_tax < Decimal("0.00"):
+                        issue = ValidationIssue(
+                            issue_id=f"iss_{uuid.uuid4().hex[:8]}",
+                            file_type=ftype,
+                            file_name=file_name,
+                            row_number=row_num,
+                            column="tax_amount",
+                            code="NEGATIVE_TAX_AMOUNT",
+                            severity=IssueSeverity.ERROR,
+                            message=f"Negative tax amount '{raw_tax}' not allowed.",
+                            raw_value=raw_tax,
+                            expected="Non-negative decimal amount (e.g. 18.00)"
+                        )
+                        issues.append(issue)
+                        error_count += 1
+                        row_has_error = True
+                    else:
+                        mapped_row["tax_amount"] = float(dec_tax)
+                except Exception:
+                    issue = ValidationIssue(
+                        issue_id=f"iss_{uuid.uuid4().hex[:8]}",
+                        file_type=ftype,
+                        file_name=file_name,
+                        row_number=row_num,
+                        column="tax_amount",
+                        code="INVALID_TAX_AMOUNT",
+                        severity=IssueSeverity.ERROR,
+                        message=f"Invalid tax amount format '{raw_tax}'.",
+                        raw_value=raw_tax,
+                        expected="Valid numeric monetary value (e.g. 18.00)"
+                    )
+                    issues.append(issue)
+                    error_count += 1
+                    row_has_error = True
+
+            # Currency validation
+            if "currency" in mapped_row and mapped_row["currency"]:
+                curr = mapped_row["currency"].upper()
+                if curr not in ALLOWED_CURRENCIES:
+                    issue = ValidationIssue(
+                        issue_id=f"iss_{uuid.uuid4().hex[:8]}",
+                        file_type=ftype,
+                        file_name=file_name,
+                        row_number=row_num,
+                        column="currency",
+                        code="INVALID_CURRENCY",
+                        severity=IssueSeverity.ERROR,
+                        message=f"Unsupported currency '{curr}'.",
+                        raw_value=mapped_row["currency"],
+                        expected=f"Expected one of: {', '.join(sorted(ALLOWED_CURRENCIES))}"
+                    )
+                    issues.append(issue)
+                    error_count += 1
+                    row_has_error = True
+                else:
+                    mapped_row["currency"] = curr
+
+            # Date Normalization & Validation
             date_key = "created_at" if ftype == "payments" else f"{ftype[:-1]}_date"
             if date_key in mapped_row and mapped_row[date_key]:
                 raw_d = mapped_row[date_key]
@@ -483,22 +583,48 @@ class UploadPipelineService:
                     issue = ValidationIssue(
                         issue_id=f"iss_{uuid.uuid4().hex[:8]}",
                         file_type=ftype,
+                        file_name=file_name,
                         row_number=row_num,
                         column=date_key,
                         code="INVALID_DATE",
                         severity=IssueSeverity.WARNING,
                         message=f"Unrecognized date format '{raw_d}'.",
-                        raw_value=raw_d
+                        raw_value=raw_d,
+                        expected="ISO-8601 or YYYY-MM-DD (e.g. 2026-03-01T10:00:00Z)"
                     )
                     issues.append(issue)
                     warning_count += 1
                 else:
                     mapped_row[date_key] = norm_d
 
-            # Status Normalization
+            # Status Normalization & Validation
             status_key = f"{ftype[:-1]}_status"
             if status_key in mapped_row and mapped_row[status_key]:
-                mapped_row[status_key] = mapped_row[status_key].upper()
+                raw_status = mapped_row[status_key].upper()
+                allowed_statuses = (
+                    ALLOWED_PAYMENT_STATUSES if ftype == "payments"
+                    else ALLOWED_SETTLEMENT_STATUSES if ftype == "settlements"
+                    else ALLOWED_REFUND_STATUSES if ftype == "refunds"
+                    else set()
+                )
+                if allowed_statuses and raw_status not in allowed_statuses:
+                    issue = ValidationIssue(
+                        issue_id=f"iss_{uuid.uuid4().hex[:8]}",
+                        file_type=ftype,
+                        file_name=file_name,
+                        row_number=row_num,
+                        column=status_key,
+                        code=f"INVALID_{status_key.upper()}",
+                        severity=IssueSeverity.ERROR,
+                        message=f"Invalid {status_key} '{raw_status}'.",
+                        raw_value=mapped_row[status_key],
+                        expected=f"Expected one of: {', '.join(sorted(allowed_statuses))}"
+                    )
+                    issues.append(issue)
+                    error_count += 1
+                    row_has_error = True
+                else:
+                    mapped_row[status_key] = raw_status
 
             if not row_has_error:
                 records.append(mapped_row)
@@ -547,6 +673,9 @@ class UploadPipelineService:
         dataset_name = req.dataset_name or f"Imported Dataset {datetime.utcnow().strftime('%d %b %Y %H:%M')}"
 
         parsed_records = self._parsed_rows_cache.get(upload_id, {})
+        if not parsed_records:
+            await self.validate_session(upload_id)
+            parsed_records = self._parsed_rows_cache.get(upload_id, {})
 
         # 1. Store records via dataset_service
         for ftype, rows in parsed_records.items():
@@ -591,6 +720,8 @@ class UploadPipelineService:
         meta["total_volume"] = recon_res.total_volume
         meta["updated_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
+        self._datasets_in_memory[dataset_id] = meta
+
         if db is not None:
             await db["datasets"].update_one(
                 {"dataset_id": dataset_id},
@@ -602,8 +733,6 @@ class UploadPipelineService:
                     "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                 }}
             )
-        else:
-            self._datasets_in_memory[dataset_id] = meta
 
         return ConfirmDatasetResponse(
             success=True,

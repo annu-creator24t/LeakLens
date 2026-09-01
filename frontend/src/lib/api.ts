@@ -934,12 +934,14 @@ export interface FileUploadInfo {
 export interface ValidationIssue {
   issue_id: string;
   file_type: string;
+  file_name?: string;
   row_number: number;
   column: string;
   code: string;
   severity: "WARNING" | "ERROR";
   message: string;
   raw_value?: string;
+  expected?: string;
 }
 
 export interface FileValidationSummary {

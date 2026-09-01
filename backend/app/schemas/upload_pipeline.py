@@ -40,12 +40,14 @@ class FileUploadInfo(BaseModel):
 class ValidationIssue(BaseModel):
     issue_id: str
     file_type: str
+    file_name: Optional[str] = None
     row_number: int
     column: str
     code: str
     severity: IssueSeverity
     message: str
     raw_value: Optional[str] = None
+    expected: Optional[str] = None
 
 
 class FileValidationSummary(BaseModel):

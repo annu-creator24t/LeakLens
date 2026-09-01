@@ -17,10 +17,13 @@ import {
   Eye,
   ShieldCheck,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Info,
   Play,
   RotateCcw,
-  Check
+  Check,
+  AlertCircle
 } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -38,11 +41,42 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { LoadingState, ErrorState } from "@/components/ui/FeedbackStates";
 import { formatNumber } from "@/lib/formatters";
 
-const REQUIRED_TARGETS: Record<string, string[]> = {
-  payments: ["payment_id", "amount", "payment_status"],
-  settlements: ["settlement_id", "payment_id", "settlement_amount", "settlement_status", "settlement_date"],
-  refunds: ["refund_id", "payment_id", "refund_amount", "refund_status", "refund_date"],
-  fees: ["payment_id", "fee_amount"],
+interface SchemaFieldOption {
+  key: string;
+  label: string;
+  isRequired: boolean;
+}
+
+const SCHEMA_TARGET_FIELDS: Record<string, SchemaFieldOption[]> = {
+  payments: [
+    { key: "payment_id", label: "Payment ID", isRequired: true },
+    { key: "order_id", label: "Order ID", isRequired: true },
+    { key: "merchant_id", label: "Merchant ID", isRequired: true },
+    { key: "amount", label: "Amount", isRequired: true },
+    { key: "currency", label: "Currency", isRequired: true },
+    { key: "payment_status", label: "Payment Status", isRequired: true },
+    { key: "payment_method", label: "Payment Method", isRequired: false },
+    { key: "created_at", label: "Created At (Date)", isRequired: true },
+  ],
+  settlements: [
+    { key: "settlement_id", label: "Settlement ID", isRequired: true },
+    { key: "payment_id", label: "Payment ID", isRequired: true },
+    { key: "settlement_amount", label: "Settlement Amount", isRequired: true },
+    { key: "settlement_status", label: "Settlement Status", isRequired: true },
+    { key: "settlement_date", label: "Settlement Date", isRequired: true },
+  ],
+  refunds: [
+    { key: "refund_id", label: "Refund ID", isRequired: true },
+    { key: "payment_id", label: "Payment ID", isRequired: true },
+    { key: "refund_amount", label: "Refund Amount", isRequired: true },
+    { key: "refund_status", label: "Refund Status", isRequired: true },
+    { key: "refund_date", label: "Refund Date", isRequired: true },
+  ],
+  fees: [
+    { key: "payment_id", label: "Payment ID", isRequired: true },
+    { key: "fee_amount", label: "Fee Amount", isRequired: true },
+    { key: "tax_amount", label: "Tax Amount", isRequired: false },
+  ],
 };
 
 const STEP_LABELS = [
@@ -72,8 +106,9 @@ export default function UploadPage() {
   const [datasetName, setDatasetName] = useState<string>("");
   const [finalResult, setFinalResult] = useState<ConfirmDatasetResponse | null>(null);
 
-  // Issues modal state
-  const [showIssuesModal, setShowIssuesModal] = useState<boolean>(false);
+  // Issues accordion states
+  const [showBlockingErrors, setShowBlockingErrors] = useState<boolean>(true);
+  const [showWarnings, setShowWarnings] = useState<boolean>(true);
 
   useEffect(() => {
     initSession();
@@ -458,9 +493,9 @@ export default function UploadPage() {
                           className="w-full p-1.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-200 font-mono outline-none focus:border-blue-500"
                         >
                           <option value="">-- Ignore Column --</option>
-                          {(REQUIRED_TARGETS[ft] || []).map((tf) => (
-                            <option key={tf} value={tf}>
-                              → {tf}
+                          {(SCHEMA_TARGET_FIELDS[ft] || []).map((tf) => (
+                            <option key={tf.key} value={tf.key}>
+                              → {tf.label} {tf.isRequired ? "(Required)" : "(Optional)"}
                             </option>
                           ))}
                         </select>
@@ -546,6 +581,178 @@ export default function UploadPage() {
               </div>
 
             </div>
+
+            {/* EXPANDABLE SECTION: VIEW BLOCKING ERRORS */}
+            {totalErrors > 0 && (
+              <div className="rounded-xl border border-rose-900/60 bg-[#140c12] overflow-hidden transition-all shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowBlockingErrors(!showBlockingErrors)}
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-rose-950/30 transition-colors border-b border-rose-950/40 cursor-pointer"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-7 h-7 rounded-lg bg-rose-900/40 border border-rose-700/50 flex items-center justify-center text-rose-400 shrink-0">
+                      <XCircle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-bold font-mono text-rose-300 uppercase tracking-wide">
+                          View Blocking Errors
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-900/80 text-rose-200 border border-rose-700/60">
+                          {formatNumber(totalErrors)} {totalErrors === 1 ? "Issue" : "Issues"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-400/80 mt-0.5">
+                        These blocking errors must be resolved before this dataset can be confirmed and imported.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-rose-400/80 hover:text-rose-200 p-1">
+                    {showBlockingErrors ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                </button>
+
+                {showBlockingErrors && (
+                  <div className="overflow-x-auto p-4">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-rose-950/80 text-[11px] font-mono uppercase text-rose-400/90">
+                          <th className="py-2.5 px-3 font-semibold">File Type</th>
+                          <th className="py-2.5 px-3 font-semibold">CSV Row Number</th>
+                          <th className="py-2.5 px-3 font-semibold">Field</th>
+                          <th className="py-2.5 px-3 font-semibold">Invalid Value</th>
+                          <th className="py-2.5 px-3 font-semibold">Expected Rule</th>
+                          <th className="py-2.5 px-3 font-semibold">Exact Error Message</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-rose-950/40 font-mono">
+                        {(session?.issues || [])
+                          .filter((i) => i.severity === "ERROR")
+                          .map((issue) => {
+                            const fileName = issue.file_name || (session?.files[issue.file_type]?.original_filename) || `${issue.file_type}.csv`;
+                            return (
+                              <tr key={issue.issue_id} className="hover:bg-rose-950/20 transition-colors text-slate-300">
+                                <td className="py-2.5 px-3 font-semibold text-rose-300 whitespace-nowrap">
+                                  <div className="flex flex-col">
+                                    <span className="uppercase text-[10px] text-rose-400">{issue.file_type}</span>
+                                    <span className="text-slate-300 text-xs">{fileName}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+                                  Row {issue.row_number}
+                                </td>
+                                <td className="py-2.5 px-3 font-medium text-amber-300 whitespace-nowrap">
+                                  {issue.column}
+                                </td>
+                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                  {issue.raw_value !== undefined && issue.raw_value !== "" ? (
+                                    <code className="text-rose-300 bg-rose-950/60 border border-rose-900/60 px-1.5 py-0.5 rounded text-[11px]">
+                                      {issue.raw_value}
+                                    </code>
+                                  ) : (
+                                    <span className="text-slate-500 italic text-[11px]">(empty)</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px]">
+                                  <span className="text-emerald-400/90 font-mono bg-emerald-950/30 border border-emerald-900/40 px-2 py-0.5 rounded inline-block">
+                                    {issue.expected || "Valid formatted field value"}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-200 font-sans max-w-xs">
+                                  {issue.message}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* EXPANDABLE SECTION: VIEW WARNINGS */}
+            {totalWarnings > 0 && (
+              <div className="rounded-xl border border-amber-900/60 bg-[#14120c] overflow-hidden transition-all shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowWarnings(!showWarnings)}
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-amber-950/30 transition-colors border-b border-amber-950/40 cursor-pointer"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-7 h-7 rounded-lg bg-amber-900/40 border border-amber-700/50 flex items-center justify-center text-amber-400 shrink-0">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-bold font-mono text-amber-300 uppercase tracking-wide">
+                          View Warnings
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-900/80 text-amber-200 border border-amber-700/60">
+                          {formatNumber(totalWarnings)} {totalWarnings === 1 ? "Notice" : "Notices"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-400/80 mt-0.5">
+                        Non-blocking potential anomalies detected (e.g. uncaptured payment references). You may proceed to import.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-amber-400/80 hover:text-amber-200 p-1">
+                    {showWarnings ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                </button>
+
+                {showWarnings && (
+                  <div className="overflow-x-auto p-4">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-amber-950/80 text-[11px] font-mono uppercase text-amber-400/90">
+                          <th className="py-2.5 px-3 font-semibold">File</th>
+                          <th className="py-2.5 px-3 font-semibold">Row</th>
+                          <th className="py-2.5 px-3 font-semibold">Field</th>
+                          <th className="py-2.5 px-3 font-semibold">Problem / Observation</th>
+                          <th className="py-2.5 px-3 font-semibold">Expected Format / Reference</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-amber-950/40 font-mono">
+                        {(session?.issues || [])
+                          .filter((i) => i.severity === "WARNING")
+                          .map((issue) => {
+                            const fileName = issue.file_name || (session?.files[issue.file_type]?.original_filename) || `${issue.file_type}.csv`;
+                            return (
+                              <tr key={issue.issue_id} className="hover:bg-amber-950/20 transition-colors text-slate-300">
+                                <td className="py-2.5 px-3 font-semibold text-amber-300 whitespace-nowrap">
+                                  {fileName}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+                                  Row {issue.row_number}
+                                </td>
+                                <td className="py-2.5 px-3 font-medium text-slate-200 whitespace-nowrap">
+                                  {issue.column}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-200 max-w-xs font-sans">
+                                  {issue.message}
+                                  {issue.raw_value !== undefined && issue.raw_value !== "" && (
+                                    <span className="block text-[11px] font-mono text-slate-400 mt-0.5">
+                                      Flagged: <code className="text-amber-300 bg-amber-950/60 px-1 py-0.5 rounded">{issue.raw_value}</code>
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px] max-w-sm">
+                                  <span className="text-amber-400/90 font-mono bg-amber-950/30 border border-amber-900/40 px-2 py-0.5 rounded inline-block">
+                                    {issue.expected || "Valid format"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-800">
               <button

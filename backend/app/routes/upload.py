@@ -111,15 +111,23 @@ async def confirm_and_import_dataset(
 @router.get("/datasets/{dataset_id}")
 async def get_dataset_metadata(dataset_id: str):
     """Retrieves individual dataset session metadata."""
-    session = await dataset_service.get_session(dataset_id)
-    if not session:
-        db = db_manager.get_db()
-        if db is not None:
-            doc = await db["datasets"].find_one({"dataset_id": dataset_id}, {"_id": 0})
-            if doc:
-                return doc
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
-    return session
+    db = db_manager.get_db()
+    if db is not None:
+        doc = await db["datasets"].find_one({"dataset_id": dataset_id}, {"_id": 0})
+        if doc:
+            return doc
+        session_doc = await db["dataset_sessions"].find_one({"dataset_id": dataset_id}, {"_id": 0})
+        if session_doc:
+            return session_doc
+
+    if dataset_id in upload_pipeline._datasets_in_memory:
+        return upload_pipeline._datasets_in_memory[dataset_id]
+
+    session = await dataset_service.get_session_status(dataset_id)
+    if session:
+        return session
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
 
 
 @router.delete("/datasets/{dataset_id}")
