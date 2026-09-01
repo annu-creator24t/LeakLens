@@ -19,9 +19,11 @@ import {
   Play,
   ArrowRight,
   ExternalLink,
-  Layers
+  Layers,
+  HelpCircle
 } from "lucide-react";
 import { fetchAvailableDatasets, generateSyntheticDataset, DatasetItem } from "@/lib/api";
+import { GettingStartedModal } from "@/components/onboarding/GettingStartedModal";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -47,9 +49,15 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [selectedDataset, setSelectedDataset] = useState<string>(currentDatasetId);
   const [isDatasetOpen, setIsDatasetOpen] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
 
   useEffect(() => {
     loadDatasets();
+    // Check if first-time user
+    const hasSeenGuide = localStorage.getItem("leaklens_hide_onboarding_guide");
+    if (!hasSeenGuide && !currentDatasetId) {
+      setIsGettingStartedOpen(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -275,7 +283,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Right Header Navigation & Actions */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
+            <button
+              type="button"
+              onClick={() => setIsGettingStartedOpen(true)}
+              className="text-xs text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700 bg-slate-900/80 px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="Open Getting Started Guide"
+              aria-label="Open Getting Started Guide"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden md:inline">Guide</span>
+            </button>
+
             <Link
               href={selectedDataset ? `/exceptions?dataset_id=${selectedDataset}&severity=CRITICAL` : "/exceptions"}
               className="text-xs text-rose-400 hover:text-rose-300 border border-rose-900/50 px-3 py-1.5 rounded-lg bg-rose-950/40 flex items-center space-x-1.5 transition-colors"
@@ -301,6 +320,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
+      {/* Onboarding Getting Started Modal */}
+      <GettingStartedModal
+        isOpen={isGettingStartedOpen}
+        onClose={() => setIsGettingStartedOpen(false)}
+        onLoadDemo={handleGenerate10kDemo}
+        loadingDemo={loadingDemo}
+      />
     </div>
   );
 }

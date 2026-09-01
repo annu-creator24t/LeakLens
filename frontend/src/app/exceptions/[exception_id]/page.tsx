@@ -46,6 +46,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LoadingState, ErrorState } from "@/components/ui/FeedbackStates";
 import { InvestigationBrief } from "@/components/investigation/InvestigationBrief";
 import { EvidenceLedger, EvidenceStep } from "@/components/investigation/EvidenceLedger";
+import { DeterministicExplanation } from "@/components/investigation/DeterministicExplanation";
+import { NextStepGuidance } from "@/components/ui/NextStepGuidance";
 import { formatDate } from "@/lib/formatters";
 
 const EXCEPTION_TITLES: Record<string, string> = {
@@ -410,6 +412,13 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
         </div>
       )}
 
+      {/* Contextual Next Step Guidance */}
+      <NextStepGuidance
+        storageKey="exception_detail_guidance"
+        title="Investigation Guidance"
+        guidance="Review the confirmed ledger facts and deterministic rules below first. AI-generated root causes are evidence-grounded hypotheses requiring human investigation."
+      />
+
       {/* 1. INVESTIGATION BRIEF: Top Hero Section */}
       <InvestigationBrief
         exceptionType={exception.exception_type}
@@ -447,7 +456,10 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
         <EvidenceLedger steps={causalSteps} />
       </div>
 
-      {/* 3. AI INVESTIGATION: Evidence-Grounded Root Cause */}
+      {/* 3. DETERMINISTIC EXCEPTION EXPLAINABILITY: WHY THIS WAS FLAGGED */}
+      <DeterministicExplanation exception={exception} />
+
+      {/* 4. AI INVESTIGATION: Evidence-Grounded Root Cause */}
       <div className="rounded-2xl border border-blue-900/40 bg-[#0c1424] p-6 space-y-6 shadow-xl">
         
         {/* Section Header */}

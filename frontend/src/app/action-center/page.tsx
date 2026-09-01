@@ -35,6 +35,7 @@ import { SeverityBadge, StatusBadge } from "@/components/ui/Badges";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { NextStepGuidance } from "@/components/ui/NextStepGuidance";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
 const EXCEPTION_TITLES: Record<string, string> = {
@@ -251,6 +252,13 @@ function ActionCenterContent() {
           <span>Refresh Queue</span>
         </button>
       </div>
+
+      {/* Contextual Next Step Guidance */}
+      <NextStepGuidance
+        storageKey="action_center_workflow"
+        title="Operations Workflow"
+        guidance="Move discrepancies through the investigation lifecycle (Open → Investigating → Resolved) and record audit notes for important decisions."
+      />
 
       {/* Success Notification */}
       {successBanner && (

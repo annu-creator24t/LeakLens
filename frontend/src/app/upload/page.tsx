@@ -40,6 +40,8 @@ import {
 import { FinancialAmount } from "@/components/ui/FinancialAmount";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { LoadingState, ErrorState } from "@/components/ui/FeedbackStates";
+import { NextStepGuidance } from "@/components/ui/NextStepGuidance";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { formatNumber } from "@/lib/formatters";
 
 interface SchemaFieldOption {
@@ -411,6 +413,12 @@ export default function UploadPage() {
         {/* STEP 1: UPLOAD FILES */}
         {step === 1 && (
           <div className="space-y-6">
+            <NextStepGuidance
+              storageKey="upload_step_1"
+              title="Import Instructions"
+              guidance="Upload your payment capture CSV (required) along with settlement, refund, and fee CSVs (optional/recommended) to enable complete reconciliation."
+            />
+
             <div className="grid md:grid-cols-2 gap-4">
               {(["payments", "settlements", "refunds", "fees"] as const).map((ft) => {
                 const fileInfo = session?.files[ft];
@@ -611,7 +619,115 @@ export default function UploadPage() {
         {/* STEP 3: DATA QUALITY & VALIDATION */}
         {step === 3 && (
           <div className="space-y-6">
-            
+            <NextStepGuidance
+              storageKey="upload_step_3"
+              title="Validation Instructions"
+              guidance={
+                totalErrors === 0
+                  ? "Your files are validated with zero blocking errors. Review the Dataset Quality Summary and proceed to confirmation."
+                  : `${totalErrors} blocking errors must be resolved in your CSV files or mappings before proceeding to confirmation.`
+              }
+            />
+
+            {/* DATASET QUALITY SUMMARY */}
+            <div className="rounded-xl border border-slate-800 bg-[#0c121e] p-5 space-y-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs font-mono shrink-0 ${
+                    totalErrors === 0
+                      ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/40"
+                      : "bg-amber-600/20 text-amber-400 border border-amber-500/40"
+                  }`}>
+                    {((totalValid + totalErrors) > 0 ? (totalValid / (totalValid + totalErrors)) * 100 : 100).toFixed(0)}%
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-sm font-bold font-mono uppercase tracking-wide text-white">
+                        DATASET QUALITY SUMMARY
+                      </h3>
+                      {totalErrors === 0 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/50 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Validation Passed</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-950 text-rose-300 border border-rose-800/50 flex items-center space-x-1">
+                          <XCircle className="w-3 h-3 text-rose-400" />
+                          <span>Blocking Errors Detected</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Formula: (Valid Records / Total Processed Records) × 100 • Deterministically calculated from schema validation rules.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-xs font-mono text-slate-300 flex items-center space-x-2 self-start sm:self-auto bg-slate-950/70 border border-slate-800 px-3 py-1.5 rounded-lg">
+                  <span className="text-slate-400">Data Quality Score:</span>
+                  <strong className={totalErrors === 0 ? "text-emerald-400" : "text-amber-400"}>
+                    {((totalValid + totalErrors) > 0 ? (totalValid / (totalValid + totalErrors)) * 100 : 100).toFixed(1)}%
+                  </strong>
+                </div>
+              </div>
+
+              {/* Visual Progress Bar */}
+              <div className="space-y-1">
+                <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div
+                    className="bg-emerald-500 transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, (totalValid + totalErrors) > 0 ? (totalValid / (totalValid + totalErrors)) * 100 : 100))}%`
+                    }}
+                  />
+                  {totalErrors > 0 && (
+                    <div
+                      className="bg-rose-500 transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (totalErrors / (totalValid + totalErrors)) * 100))}%`
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* File Breakdown Grid */}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                {Object.entries(session?.files || {}).map(([ft, finfo]) => {
+                  const summary = session?.validation_summaries?.[ft];
+                  const vRows = summary?.valid_rows ?? finfo.row_count;
+                  const eCount = summary?.error_count ?? 0;
+                  const wCount = summary?.warning_count ?? 0;
+
+                  return (
+                    <div key={ft} className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/90 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold uppercase text-slate-200">{ft}</span>
+                        {eCount === 0 ? (
+                          <span className="text-[10px] font-mono text-emerald-400 flex items-center space-x-0.5">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>100% Valid</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-rose-400 font-semibold">
+                            {eCount} {eCount === 1 ? "Error" : "Errors"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400 flex justify-between">
+                        <span>{formatNumber(finfo.row_count)} rows</span>
+                        {wCount > 0 ? (
+                          <span className="text-amber-400 font-semibold">{wCount} notices</span>
+                        ) : (
+                          <span className="text-slate-500">0 notices</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Quality KPI Cards */}
             <div className="grid grid-cols-3 gap-4">
               

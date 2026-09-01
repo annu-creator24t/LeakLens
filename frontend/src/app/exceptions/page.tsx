@@ -27,6 +27,7 @@ import { FinancialAmount } from "@/components/ui/FinancialAmount";
 import { SeverityBadge, StatusBadge } from "@/components/ui/Badges";
 import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { NextStepGuidance } from "@/components/ui/NextStepGuidance";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
 const EXCEPTION_TYPES: Record<string, string> = {
@@ -204,6 +205,13 @@ function ExceptionsListContent() {
         </button>
       </div>
 
+      {/* Contextual Next Step Guidance */}
+      <NextStepGuidance
+        storageKey="exceptions_queue"
+        title="Guidance"
+        guidance="Review discrepancies prioritized by financial impact and severity. Click any item to inspect deterministic evidence and root causes."
+      />
+
       {/* Filter Toolbar */}
       <div className="p-4 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 shadow-md">
         
@@ -320,17 +328,21 @@ function ExceptionsListContent() {
             </table>
           </div>
         ) : exceptions.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
-            <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto opacity-70" />
-            <p className="text-slate-200 font-semibold text-sm font-sans">
-              {isFiltered ? "No matching financial discrepancies" : "Zero Exceptions Detected"}
-            </p>
-            <p className="text-slate-400 font-mono text-xs max-w-md mx-auto">
-              {isFiltered
-                ? "No exceptions match the selected filter criteria in this session."
-                : "All transaction captures have reconciled with 100% mathematical precision against settlement batches."}
-            </p>
-            {isFiltered && (
+          <div className="p-12 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400 mx-auto">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-slate-200 font-semibold text-sm font-sans">
+                {isFiltered ? "No matching financial discrepancies" : "Zero Exceptions Detected"}
+              </p>
+              <p className="text-slate-400 text-xs max-w-md mx-auto leading-relaxed">
+                {isFiltered
+                  ? "No exceptions match the selected filter criteria in this session."
+                  : "All transaction captures have reconciled successfully against settlement batches. There are no outstanding revenue leakages."}
+              </p>
+            </div>
+            {isFiltered ? (
               <button
                 type="button"
                 onClick={handleResetFilters}
@@ -338,6 +350,14 @@ function ExceptionsListContent() {
               >
                 Reset All Filters
               </button>
+            ) : (
+              <Link
+                href={`/transactions?dataset_id=${datasetId}`}
+                className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-sm transition-colors"
+              >
+                <span>View Reconciled Ledger</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             )}
           </div>
         ) : (

@@ -42,6 +42,8 @@ import {
 import { FinancialAmount } from "@/components/ui/FinancialAmount";
 import { SeverityBadge, StatusBadge } from "@/components/ui/Badges";
 import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { NextStepGuidance } from "@/components/ui/NextStepGuidance";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
 const EXCEPTION_TITLES: Record<string, string> = {
@@ -281,6 +283,19 @@ function DashboardContent() {
         </div>
       </div>
 
+      {/* Contextual Next Step Guidance */}
+      <NextStepGuidance
+        storageKey="dashboard_overview"
+        title="Recommended Action"
+        guidance={
+          unexplainedAmount > 0
+            ? "Review the financial health summary below, then investigate high-impact discrepancies in the Exceptions Queue."
+            : "All processed payments reconcile successfully against bank payouts. You can explore transaction records or generate compliance reports."
+        }
+        actionText={unexplainedAmount > 0 ? "Review Exceptions" : "View Ledger"}
+        actionHref={unexplainedAmount > 0 ? `/exceptions?dataset_id=${datasetId}` : `/transactions?dataset_id=${datasetId}`}
+      />
+
       {/* Localized Error Banner */}
       {error && (
         <ErrorState
@@ -307,9 +322,12 @@ function DashboardContent() {
           </div>
 
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-              Unexplained Difference
-            </span>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Unexplained Difference
+              </span>
+              <Tooltip content="Money that could not be fully explained by matching payment captures with bank settlements." iconOnly />
+            </div>
             <div className="pt-0.5">
               <FinancialAmount
                 amount={unexplainedAmount}
@@ -365,9 +383,12 @@ function DashboardContent() {
         {/* 2. LEDGER SETTLEMENT BREAKDOWN */}
         <div className="lg:col-span-5 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-5 shadow-xl">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
-              Settlement Health Rate
-            </span>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
+                Settlement Health Rate
+              </span>
+              <Tooltip content="Percentage of transactions matching expected settlement payout within tolerance." iconOnly />
+            </div>
             <span className="text-xs font-mono font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-950/50 border border-emerald-800/40">
               {recRate.toFixed(1)}% Matched
             </span>
@@ -408,11 +429,17 @@ function DashboardContent() {
           {/* Settlement Totals Grid */}
           <div className="space-y-2.5 pt-2 border-t border-slate-800/80 text-xs">
             <div className="flex justify-between items-center text-slate-400">
-              <span>Expected Settlement:</span>
+              <div className="flex items-center space-x-1">
+                <span>Expected Settlement:</span>
+                <Tooltip content="The net amount you should receive based on payment records minus fees." iconOnly />
+              </div>
               <FinancialAmount amount={summary?.expected_settlement} size="sm" />
             </div>
             <div className="flex justify-between items-center text-slate-400">
-              <span>Actual Settlement:</span>
+              <div className="flex items-center space-x-1">
+                <span>Actual Settlement:</span>
+                <Tooltip content="The amount actually credited and recorded by acquiring banks." iconOnly />
+              </div>
               <FinancialAmount amount={summary?.actual_settlement} size="sm" />
             </div>
             <div className="flex justify-between items-center text-slate-400 pt-1.5 border-t border-slate-850 font-semibold">

@@ -32,6 +32,7 @@ import { FinancialAmount } from "@/components/ui/FinancialAmount";
 import { SeverityBadge, StatusBadge } from "@/components/ui/Badges";
 import { LoadingState, ErrorState, EmptyState } from "@/components/ui/FeedbackStates";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { NextStepGuidance } from "@/components/ui/NextStepGuidance";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
 const EXCEPTION_TITLES: Record<string, string> = {
@@ -198,6 +199,13 @@ function ReportsContent() {
           </a>
         </div>
       </div>
+
+      {/* Contextual Next Step Guidance */}
+      <NextStepGuidance
+        storageKey="reports_guidance"
+        title="Audit & Reporting"
+        guidance="Once reconciliation and investigations are complete, generate an audit-ready PDF report or export raw CSV ledger datasets for external auditors."
+      />
 
       {/* Success Notification */}
       {successBanner && (
