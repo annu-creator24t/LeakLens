@@ -79,7 +79,7 @@ function TransactionDetailContent({ paymentId }: { paymentId: string }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Breadcrumbs
           items={[
-            { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
+            { label: "Dashboard", href: `/dashboard?dataset_id=${datasetId}` },
             { label: "Transactions", href: `/transactions?dataset_id=${datasetId}` },
             { label: paymentId, isCurrent: true },
           ]}

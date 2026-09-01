@@ -12,7 +12,7 @@ class QueryPlannerService:
     INJECTION_PATTERNS = [
         r"ignore\s+(all\s+)?(previous|prior|system)\s+instructions?",
         r"(show|tell|print|reveal|give|leak|dump)\s+(me\s+)?(your\s+|the\s+)?.*?(password|credential|secret|api[_\s]key|jwt|env|internal|instruction|prompt|system)",
-        r"(drop|delete|truncate|insert|update)\s+(table|collection|database)",
+        r"(drop|delete|truncate|insert|update|modify|alter|set|change|mark|overwrite|fake)\s+.*?(table|collection|database|total|amount|balance|exception|status|difference|discrepancy|payout|settlement)",
         r"system\s+prompt",
         r"<script.*?>",
         r"\{\{.*?\}\}",

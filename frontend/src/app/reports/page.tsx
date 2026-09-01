@@ -141,7 +141,7 @@ function ReportsContent() {
       {/* Breadcrumbs */}
       <Breadcrumbs
         items={[
-          { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
+          { label: "Dashboard", href: `/dashboard?dataset_id=${datasetId}` },
           { label: "Reconciliation Reports", isCurrent: true },
         ]}
       />

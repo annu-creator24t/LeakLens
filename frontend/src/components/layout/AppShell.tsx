@@ -24,18 +24,17 @@ import {
 import { fetchAvailableDatasets, generateSyntheticDataset, DatasetItem } from "@/lib/api";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: Receipt },
   { href: "/exceptions", label: "Exceptions", icon: AlertTriangle },
-  { href: "/action-center", label: "Action Center", icon: ShieldCheck },
   { href: "/investigate", label: "Ask LeakLens", icon: Sparkles },
+  { href: "/action-center", label: "Action Center", icon: ShieldCheck },
   { href: "/reports", label: "Reports", icon: FileText },
 ];
 
 const SECONDARY_NAV = [
-  { href: "/upload", label: "Import Data", icon: FileSpreadsheet },
-  { href: "/generator", label: "Benchmark Data", icon: Cpu },
-  { href: "/evaluation", label: "Model Evaluation", icon: Activity },
+  { href: "/upload", label: "Import CSV Data", icon: FileSpreadsheet },
+  { href: "/generator", label: "Generate Demo Data", icon: Cpu },
 ];
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
@@ -157,7 +156,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             </nav>
 
             <div className="text-[10px] uppercase font-mono text-slate-400 px-3 pt-5 pb-1.5 font-semibold">
-              Data & Benchmarking
+              Data Management
             </div>
             <nav className="space-y-1">
               {SECONDARY_NAV.map((item) => {

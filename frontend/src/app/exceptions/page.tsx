@@ -168,7 +168,7 @@ function ExceptionsListContent() {
       {/* Breadcrumbs */}
       <Breadcrumbs
         items={[
-          { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
+          { label: "Dashboard", href: `/dashboard?dataset_id=${datasetId}` },
           { label: "Financial Discrepancy Queue", isCurrent: true },
         ]}
       />

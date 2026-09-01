@@ -227,7 +227,7 @@ export default function UploadPage() {
         {/* Breadcrumbs */}
         <Breadcrumbs
           items={[
-            { label: "Overview", href: "/dashboard" },
+            { label: "Dashboard", href: "/dashboard" },
             { label: "Import Financial Data", isCurrent: true },
           ]}
         />
@@ -342,9 +342,24 @@ export default function UploadPage() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
-                        <span className="text-xs font-bold font-mono uppercase tracking-wider text-slate-300 block">
-                          {ft} CSV
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-bold font-mono uppercase tracking-wider text-slate-300 block">
+                            {ft} CSV
+                          </span>
+                          {ft === "payments" ? (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-semibold bg-rose-950/60 text-rose-300 border border-rose-800/50">
+                              Required
+                            </span>
+                          ) : ft === "settlements" ? (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-semibold bg-blue-950/60 text-blue-300 border border-blue-800/50">
+                              Recommended
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-semibold bg-slate-900 text-slate-400 border border-slate-800">
+                              Optional
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400">
                           {ft === "payments" && "Captured merchant orders and gross amounts"}
                           {ft === "settlements" && "Bank payout records and settlement batch IDs"}
@@ -354,7 +369,7 @@ export default function UploadPage() {
                       </div>
 
                       {fileInfo && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800/50 flex items-center space-x-1">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800/50 flex items-center space-x-1 shrink-0">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Uploaded</span>
                         </span>
@@ -643,7 +658,7 @@ export default function UploadPage() {
                 href={`/dashboard?dataset_id=${finalResult.dataset_id}`}
                 className="w-full py-3 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center space-x-2 transition-colors cursor-pointer"
               >
-                <span>Go to Reconciliation Overview</span>
+                <span>Go to Reconciliation Dashboard</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>

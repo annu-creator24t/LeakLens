@@ -216,7 +216,7 @@ function ActionCenterContent() {
       {/* Breadcrumbs */}
       <Breadcrumbs
         items={[
-          { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
+          { label: "Dashboard", href: `/dashboard?dataset_id=${datasetId}` },
           { label: "Action Center", isCurrent: true },
         ]}
       />

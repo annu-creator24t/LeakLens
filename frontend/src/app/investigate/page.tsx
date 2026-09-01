@@ -165,6 +165,14 @@ function InvestigateContent() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto flex flex-col h-[calc(100vh-8.5rem)]">
       
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: "Dashboard", href: `/dashboard?dataset_id=${datasetId}` },
+          { label: "Ask LeakLens", isCurrent: true },
+        ]}
+      />
+
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800 shrink-0">
         <div>

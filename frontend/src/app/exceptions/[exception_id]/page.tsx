@@ -368,7 +368,7 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   ];
 
   const breadcrumbItems = [
-    { label: "Overview", href: `/dashboard?dataset_id=${datasetId}` },
+    { label: "Dashboard", href: `/dashboard?dataset_id=${datasetId}` },
     { label: "Exceptions Queue", href: `/exceptions?dataset_id=${datasetId}` },
     { label: exception.payment_id || exception.exception_id, isCurrent: true },
   ];

@@ -79,7 +79,7 @@ export default function GeneratorPage() {
         {/* Breadcrumbs */}
         <Breadcrumbs
           items={[
-            { label: "Overview", href: "/dashboard" },
+            { label: "Dashboard", href: "/dashboard" },
             { label: "Synthetic Benchmark Generator", isCurrent: true },
           ]}
         />
