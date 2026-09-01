@@ -38,6 +38,9 @@ class ActionCenterService:
     async def get_summary(self, dataset_id: str) -> ActionCenterSummary:
         """Retrieves real-time status counts and unresolved financial impact for the dataset."""
         exceptions, _ = await exception_detector.get_exceptions(dataset_id=dataset_id, limit=100000)
+        if not exceptions:
+            from app.services.reconciliation_engine import reconciliation_engine
+            exceptions, _ = await reconciliation_engine.get_exceptions(dataset_id=dataset_id, limit=100000)
         
         counts = {
             InvestigationStatus.OPEN: 0,
@@ -48,7 +51,7 @@ class ActionCenterService:
         unresolved_impact = 0.0
 
         for exc in exceptions:
-            st_raw = exc.get("status", "OPEN").upper()
+            st_raw = str(exc.get("status", "OPEN")).upper()
             try:
                 st = InvestigationStatus(st_raw)
             except ValueError:
@@ -56,7 +59,11 @@ class ActionCenterService:
             counts[st] = counts.get(st, 0) + 1
 
             if st in [InvestigationStatus.OPEN, InvestigationStatus.INVESTIGATING]:
-                unresolved_impact += exc.get("financial_impact", exc.get("amount_discrepancy", 0.0))
+                impact_val = exc.get("financial_impact", exc.get("amount_discrepancy", 0.0))
+                try:
+                    unresolved_impact += float(impact_val)
+                except (ValueError, TypeError):
+                    pass
 
         return ActionCenterSummary(
             open=counts[InvestigationStatus.OPEN],
@@ -86,22 +93,27 @@ class ActionCenterService:
         3. Age / Creation Timestamp
         """
         exceptions, _ = await exception_detector.get_exceptions(dataset_id=dataset_id, limit=100000)
+        if not exceptions:
+            from app.services.reconciliation_engine import reconciliation_engine
+            exceptions, _ = await reconciliation_engine.get_exceptions(dataset_id=dataset_id, limit=100000)
         
         filtered = []
         for exc in exceptions:
-            st = exc.get("status", "OPEN").upper()
+            st = str(exc.get("status", "OPEN")).upper()
             if status_filter and status_filter != "ALL" and st != status_filter.upper():
                 continue
 
-            sev = exc.get("severity", "MEDIUM").upper()
-            if severity_filter and severity_filter != "ALL" and sev != severity_filter.upper():
+            sev = exc.get("severity", "MEDIUM")
+            sev_str = (sev.value if hasattr(sev, "value") else str(sev)).upper()
+            if severity_filter and severity_filter != "ALL" and sev_str != severity_filter.upper():
                 continue
 
             etype = exc.get("primary_exception_type", exc.get("exception_type", ""))
-            if type_filter and type_filter != "ALL" and etype != type_filter:
+            etype_str = (etype.value if hasattr(etype, "value") else str(etype)).upper()
+            if type_filter and type_filter != "ALL" and etype_str != type_filter.upper():
                 continue
 
-            impact = exc.get("financial_impact", exc.get("amount_discrepancy", 0.0))
+            impact = float(exc.get("financial_impact", exc.get("amount_discrepancy", 0.0)))
             if min_impact is not None and impact < min_impact:
                 continue
             if max_impact is not None and impact > max_impact:
@@ -119,11 +131,12 @@ class ActionCenterService:
 
         # Deterministic Sort
         def sort_key(e: Dict[str, Any]):
-            sev = e.get("severity", "LOW").upper()
-            weight = SEVERITY_WEIGHTS.get(sev, 0)
-            impact = e.get("financial_impact", e.get("amount_discrepancy", 0.0))
-            created = e.get("detected_at", e.get("created_at", ""))
-            return (-weight, -impact, created)
+            s = e.get("severity", "LOW")
+            s_str = (s.value if hasattr(s, "value") else str(s)).upper()
+            weight = SEVERITY_WEIGHTS.get(s_str, 0)
+            imp = float(e.get("financial_impact", e.get("amount_discrepancy", 0.0)))
+            created = str(e.get("detected_at", e.get("created_at", "")))
+            return (-weight, -imp, created)
 
         filtered.sort(key=sort_key)
 
@@ -149,9 +162,12 @@ class ActionCenterService:
         """
         exc = await exception_detector.get_exception_detail(dataset_id, exception_id)
         if not exc:
+            from app.services.reconciliation_engine import reconciliation_engine
+            exc = await reconciliation_engine.get_exception_detail(dataset_id, exception_id)
+        if not exc:
             raise ValueError(f"Exception '{exception_id}' not found in dataset '{dataset_id}'.")
 
-        current_raw = exc.get("status", "OPEN").upper()
+        current_raw = str(exc.get("status", "OPEN")).upper()
         try:
             current_status = InvestigationStatus(current_raw)
         except ValueError:
@@ -173,6 +189,19 @@ class ActionCenterService:
         # 1. Update Exception Record in cache / DB
         exc["status"] = target_status.value
         exc["updated_at"] = now_str
+
+        # Update in reconciliation_engine cache
+        from app.services.reconciliation_engine import reconciliation_engine
+        for e in reconciliation_engine._reconciled_exceptions.get(dataset_id, []):
+            if e.get("exception_id") == exception_id:
+                e["status"] = target_status.value
+                e["updated_at"] = now_str
+
+        # Update in exception_detector cache
+        for e in exception_detector._exceptions_cache.get(dataset_id, []):
+            if e.get("exception_id") == exception_id:
+                e["status"] = target_status.value
+                e["updated_at"] = now_str
 
         db = db_manager.get_db()
         if db is not None:

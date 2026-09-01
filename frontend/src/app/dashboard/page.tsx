@@ -30,6 +30,7 @@ import {
   runReconciliation,
   fetchReconciliationSummary,
   fetchExceptionSummary,
+  fetchReconciliationExceptions,
   fetchPriorityQueue,
   fetchActionCenterSummary,
   generateSyntheticDataset,
@@ -97,9 +98,17 @@ function DashboardContent() {
       if (actRes.status === "fulfilled") {
         setActionSummary(actRes.value);
       }
-      if (prioRes.status === "fulfilled") {
-        setTopExceptions(prioRes.value.items);
+      
+      let topItems: ExceptionItem[] = prioRes.status === "fulfilled" ? prioRes.value.items : [];
+      if (topItems.length === 0 && recSummary.exception_count > 0) {
+        try {
+          const excFallback = await fetchReconciliationExceptions(id, { page: 1, limit: 6 });
+          topItems = excFallback.items;
+        } catch {
+          // Ignored
+        }
       }
+      setTopExceptions(topItems);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong while loading this financial dataset.");
     } finally {
@@ -220,9 +229,13 @@ function DashboardContent() {
   const recRate = summary?.reconciliation_rate ?? 0;
   const unrecRate = Math.max(0, 100 - recRate);
   const unexplainedAmount = summary?.unexplained_difference ?? 0;
-  const openCount = actionSummary?.open ?? (summary?.exception_count ?? 0);
+  const totalExceptions = summary?.exception_count ?? excSummary?.total_exceptions ?? actionSummary?.total ?? 0;
+
+  // Action Center Lifecycle status counts derived from the active dataset
+  const openCount = actionSummary && actionSummary.total > 0 ? actionSummary.open : (actionSummary ? actionSummary.open : totalExceptions);
   const investigatingCount = actionSummary?.investigating ?? 0;
   const resolvedCount = actionSummary?.resolved ?? 0;
+  const ignoredCount = actionSummary?.ignored ?? 0;
   const matchedCount = summary?.matched_count ?? 0;
   const totalVolume = summary?.total_transactions ?? 0;
 
@@ -460,9 +473,32 @@ function DashboardContent() {
                 {topExceptions.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-10 text-center text-slate-500 font-sans">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-60" />
-                      <p className="font-semibold text-slate-300">Clean Reconciliation</p>
-                      <p className="text-xs text-slate-500">No unresolved discrepancies found in this dataset session.</p>
+                      {totalExceptions === 0 ? (
+                        <>
+                          <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-80" />
+                          <p className="font-semibold text-slate-200 text-sm">Clean Reconciliation</p>
+                          <p className="text-xs text-slate-400 mt-1">100% matched. Zero financial discrepancies detected in this dataset session.</p>
+                        </>
+                      ) : openCount === 0 ? (
+                        <>
+                          <ShieldCheck className="w-8 h-8 text-blue-400 mx-auto mb-2 opacity-80" />
+                          <p className="font-semibold text-slate-200 text-sm">All Discrepancies Handled</p>
+                          <p className="text-xs text-slate-400 mt-1">All {totalExceptions} detected exceptions have been investigated or resolved.</p>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-80" />
+                          <p className="font-semibold text-slate-200 text-sm">Open Discrepancies Detected</p>
+                          <p className="text-xs text-slate-400 mt-1">{openCount} open discrepancies detected in this dataset.</p>
+                          <Link
+                            href={`/exceptions?dataset_id=${datasetId}`}
+                            className="inline-flex items-center space-x-1 mt-3 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+                          >
+                            <span>View All Exceptions ({totalExceptions})</span>
+                            <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                          </Link>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ) : (

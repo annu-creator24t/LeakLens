@@ -303,6 +303,10 @@ class ExceptionDetectionService:
         self._exceptions_cache[dataset_id] = exceptions
         self._summary_cache[dataset_id] = summary.model_dump()
 
+        # Synchronize with reconciliation_engine cache
+        from app.services.reconciliation_engine import reconciliation_engine
+        reconciliation_engine._reconciled_exceptions[dataset_id] = exceptions
+
         db = db_manager.get_db()
         if db is not None:
             await db["reconciliation_exceptions"].delete_many({"dataset_id": dataset_id})
@@ -320,8 +324,15 @@ class ExceptionDetectionService:
         if db is not None:
             doc = await db["exception_summaries"].find_one({"dataset_id": dataset_id}, {"_id": 0})
             if doc:
+                self._summary_cache[dataset_id] = doc
                 return ExceptionSummary(**doc)
-        return None
+
+        # Auto-detect on demand if not present
+        try:
+            res = await self.detect_exceptions(dataset_id)
+            return res.summary
+        except Exception:
+            return None
 
     async def get_exceptions(
         self,
@@ -335,19 +346,32 @@ class ExceptionDetectionService:
         all_exc = self._exceptions_cache.get(dataset_id, [])
 
         if not all_exc:
+            from app.services.reconciliation_engine import reconciliation_engine
+            if dataset_id in reconciliation_engine._reconciled_exceptions and reconciliation_engine._reconciled_exceptions[dataset_id]:
+                all_exc = reconciliation_engine._reconciled_exceptions[dataset_id]
+                self._exceptions_cache[dataset_id] = all_exc
+
+        if not all_exc:
             db = db_manager.get_db()
             if db is not None:
                 cursor = db["reconciliation_exceptions"].find({"dataset_id": dataset_id}, {"_id": 0})
                 all_exc = await cursor.to_list(length=None)
                 self._exceptions_cache[dataset_id] = all_exc
 
+        if not all_exc:
+            try:
+                await self.detect_exceptions(dataset_id)
+                all_exc = self._exceptions_cache.get(dataset_id, [])
+            except Exception:
+                pass
+
         filtered = all_exc
         if severity and severity != "ALL":
-            filtered = [e for e in filtered if e.get("severity") == severity]
+            filtered = [e for e in filtered if (e.get("severity").value if hasattr(e.get("severity"), "value") else str(e.get("severity", "")).upper()) == severity.upper()]
         if exception_type and exception_type != "ALL":
-            filtered = [e for e in filtered if e.get("primary_exception_type") == exception_type or e.get("exception_type") == exception_type]
+            filtered = [e for e in filtered if (e.get("primary_exception_type", e.get("exception_type", "")).value if hasattr(e.get("primary_exception_type", e.get("exception_type", "")), "value") else str(e.get("primary_exception_type", e.get("exception_type", ""))).upper()) == exception_type.upper()]
         if status and status != "ALL":
-            filtered = [e for e in filtered if e.get("status") == status]
+            filtered = [e for e in filtered if str(e.get("status", "OPEN")).upper() == status.upper()]
 
         total = len(filtered)
         start = (page - 1) * limit
@@ -357,7 +381,7 @@ class ExceptionDetectionService:
     async def get_exception_detail(self, dataset_id: str, exception_id: str) -> Optional[Dict[str, Any]]:
         exceptions, _ = await self.get_exceptions(dataset_id, limit=100000)
         for e in exceptions:
-            if e["exception_id"] == exception_id:
+            if e.get("exception_id") == exception_id:
                 return e
         return None
 

@@ -474,26 +474,39 @@ class ReconciliationEngine:
         self._reconciled_summaries[dataset_id] = summary
         self._reconciled_exceptions[dataset_id] = exceptions
 
+        # Synchronize with exception_detector cache
+        from app.services.exception_detector import exception_detector
+        exception_detector._exceptions_cache[dataset_id] = exceptions
+
         db = db_manager.get_db()
         if db is not None:
             # Clear previous runs for idempotency
             await db["reconciliation_summaries"].delete_many({"dataset_id": dataset_id})
             await db["reconciliation_exceptions"].delete_many({"dataset_id": dataset_id})
 
-            await db["reconciliation_summaries"].insert_one(summary)
+            await db["reconciliation_summaries"].insert_one(dict(summary))
             if exceptions:
                 # Store cleaned docs without ObjectId mutation
                 await db["reconciliation_exceptions"].insert_many([dict(e) for e in exceptions])
 
     async def get_summary(self, dataset_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieves reconciled summary for dataset."""
+        """Retrieves reconciled summary for dataset, auto-reconciling if needed."""
         if dataset_id in self._reconciled_summaries:
             return self._reconciled_summaries[dataset_id]
 
         db = db_manager.get_db()
         if db is not None:
-            return await db["reconciliation_summaries"].find_one({"dataset_id": dataset_id}, {"_id": 0})
-        return None
+            doc = await db["reconciliation_summaries"].find_one({"dataset_id": dataset_id}, {"_id": 0})
+            if doc:
+                self._reconciled_summaries[dataset_id] = doc
+                return doc
+
+        # On-demand reconciliation for uncomputed active dataset
+        try:
+            res = await self.reconcile(dataset_id)
+            return self._reconciled_summaries.get(dataset_id)
+        except Exception:
+            return None
 
     async def get_exceptions(
         self,
@@ -504,8 +517,14 @@ class ReconciliationEngine:
         page: int = 1,
         limit: int = 50
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Queries exceptions with filtering, search, and pagination."""
+        """Queries exceptions with filtering, search, and pagination, auto-loading if needed."""
         all_exc = self._reconciled_exceptions.get(dataset_id, [])
+
+        if not all_exc:
+            from app.services.exception_detector import exception_detector
+            if dataset_id in exception_detector._exceptions_cache and exception_detector._exceptions_cache[dataset_id]:
+                all_exc = exception_detector._exceptions_cache[dataset_id]
+                self._reconciled_exceptions[dataset_id] = all_exc
 
         if not all_exc:
             db = db_manager.get_db()
@@ -515,19 +534,28 @@ class ReconciliationEngine:
                 all_exc = await cursor.to_list(length=None)
                 self._reconciled_exceptions[dataset_id] = all_exc
 
+        if not all_exc:
+            try:
+                await self.reconcile(dataset_id)
+                all_exc = self._reconciled_exceptions.get(dataset_id, [])
+            except Exception:
+                pass
+
         # Apply in-memory filtering
         filtered = all_exc
         if severity:
-            filtered = [e for e in filtered if e["severity"] == severity]
+            sev_str = severity.value if hasattr(severity, "value") else str(severity)
+            filtered = [e for e in filtered if (e.get("severity").value if hasattr(e.get("severity"), "value") else str(e.get("severity", "")).upper()) == sev_str.upper()]
         if exception_type:
-            filtered = [e for e in filtered if e["exception_type"] == exception_type]
+            type_str = exception_type.value if hasattr(exception_type, "value") else str(exception_type)
+            filtered = [e for e in filtered if (e.get("exception_type").value if hasattr(e.get("exception_type"), "value") else str(e.get("exception_type", "")).upper()) == type_str.upper() or str(e.get("primary_exception_type", "")).upper() == type_str.upper()]
         if search:
             q = search.strip().lower()
             filtered = [
                 e for e in filtered if
-                (e.get("payment_id") and q in e["payment_id"].lower()) or
-                (e.get("exception_id") and q in e["exception_id"].lower()) or
-                (e.get("description") and q in e["description"].lower())
+                (e.get("payment_id") and q in str(e["payment_id"]).lower()) or
+                (e.get("exception_id") and q in str(e["exception_id"]).lower()) or
+                (e.get("description") and q in str(e["description"]).lower())
             ]
 
         total = len(filtered)
@@ -539,9 +567,9 @@ class ReconciliationEngine:
 
     async def get_exception_detail(self, dataset_id: str, exception_id: str) -> Optional[Dict[str, Any]]:
         """Fetches individual exception detail."""
-        exceptions, _ = await self.get_exceptions(dataset_id=dataset_id, limit=10000)
+        exceptions, _ = await self.get_exceptions(dataset_id=dataset_id, limit=100000)
         for e in exceptions:
-            if e["exception_id"] == exception_id:
+            if e.get("exception_id") == exception_id:
                 return e
         return None
 

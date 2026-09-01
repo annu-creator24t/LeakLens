@@ -6,6 +6,7 @@ from app.services.exception_detector import exception_detector
 from app.services.data_generator import data_generator
 from app.services.dataset_service import dataset_service
 from app.utils.money import to_decimal
+from app.db.session import db_manager
 
 router = APIRouter(tags=["Transactions & Datasets"])
 
@@ -113,7 +114,8 @@ async def _get_or_build_reconciled_records(dataset_id: str) -> List[Dict[str, An
 
         tx_status = "RECONCILED"
         if pid in exc_by_pid:
-            tx_status = exc_by_pid[pid]["primary_exception_type"]
+            raw_t = exc_by_pid[pid].get("primary_exception_type") or exc_by_pid[pid].get("exception_type") or "MISMATCH"
+            tx_status = raw_t.value if hasattr(raw_t, "value") else str(raw_t)
         elif p.get("payment_status") != "SUCCESS":
             tx_status = p.get("payment_status", "FAILED")
         elif diff > to_decimal("0.01"):
@@ -246,7 +248,7 @@ async def get_transaction_detail(dataset_id: str, payment_id: str):
             "actual_settlement": float(actual),
             "difference": float(diff),
         },
-        "status": exc["primary_exception_type"] if exc else ("RECONCILED" if diff <= to_decimal("0.01") else "MISMATCH"),
+        "status": (exc.get("primary_exception_type", exc.get("exception_type")).value if hasattr(exc.get("primary_exception_type", exc.get("exception_type")), "value") else str(exc.get("primary_exception_type", exc.get("exception_type")))) if exc else ("RECONCILED" if diff <= to_decimal("0.01") else "MISMATCH"),
         "exception": exc,
         "timeline": timeline
     }
@@ -266,8 +268,22 @@ async def update_exception_status(dataset_id: str, exception_id: str, payload: S
 
     items, _ = await exception_detector.get_exceptions(dataset_id, limit=100000)
     for item in items:
-        if item["exception_id"] == exception_id:
-            item["status"] = payload.status.upper()
+        if item.get("exception_id") == exception_id:
+            new_status = payload.status.upper()
+            item["status"] = new_status
+
+            # Sync into reconciliation_engine cache
+            for e in reconciliation_engine._reconciled_exceptions.get(dataset_id, []):
+                if e.get("exception_id") == exception_id:
+                    e["status"] = new_status
+
+            db = db_manager.get_db()
+            if db is not None:
+                await db["reconciliation_exceptions"].update_one(
+                    {"dataset_id": dataset_id, "exception_id": exception_id},
+                    {"$set": {"status": new_status}}
+                )
+
             return {"success": True, "exception_id": exception_id, "status": item["status"]}
 
     raise HTTPException(
