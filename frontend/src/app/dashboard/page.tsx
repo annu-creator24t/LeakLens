@@ -251,7 +251,7 @@ function DashboardContent() {
             </h1>
             <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-blue-950/70 border border-blue-800/50 text-blue-300 flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span>Session: <strong className="font-semibold text-white">{datasetId}</strong></span>
+              <span>Dataset: <strong className="font-semibold text-white">{datasetId.length > 20 ? `LL-${datasetId.slice(-6).toUpperCase()}` : datasetId}</strong></span>
             </span>
           </div>
           <p className="text-slate-400 text-xs mt-1">
@@ -296,7 +296,7 @@ function DashboardContent() {
         <div className="lg:col-span-7 p-6 rounded-2xl border border-slate-800 bg-[#0c121e] flex flex-col justify-between space-y-6 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+              <div className={`w-2.5 h-2.5 rounded-full ${unexplainedAmount > 0 ? "bg-rose-500" : "bg-emerald-500"}`} />
               <span className="text-xs font-mono font-bold uppercase tracking-widest text-slate-400">
                 FINANCIAL HEALTH
               </span>
@@ -394,8 +394,13 @@ function DashboardContent() {
                 <span>Reconciled: <strong className="text-slate-200">{formatNumber(matchedCount)} ({recRate.toFixed(1)}%)</strong></span>
               </div>
               <div className="flex items-center space-x-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-500" />
-                <span>Exceptions: <strong className="text-slate-200">{formatNumber(summary?.exception_count)} ({unrecRate.toFixed(1)}%)</strong></span>
+                <span className={`w-2 h-2 rounded-full ${summary?.exception_count === 0 ? "bg-emerald-500" : "bg-rose-500"}`} />
+                <span>
+                  Exceptions:{" "}
+                  <strong className={summary?.exception_count === 0 ? "text-emerald-400" : "text-slate-200"}>
+                    {summary?.exception_count === 0 ? "0 (Clean)" : `${formatNumber(summary?.exception_count)} (${unrecRate.toFixed(1)}%)`}
+                  </strong>
+                </span>
               </div>
             </div>
           </div>
@@ -411,8 +416,8 @@ function DashboardContent() {
               <FinancialAmount amount={summary?.actual_settlement} size="sm" />
             </div>
             <div className="flex justify-between items-center text-slate-400 pt-1.5 border-t border-slate-850 font-semibold">
-              <span className="text-rose-400">Unexplained Difference:</span>
-              <FinancialAmount amount={summary?.unexplained_difference} size="sm" variant="danger" />
+              <span className={unexplainedAmount > 0 ? "text-rose-400" : "text-emerald-400"}>Unexplained Difference:</span>
+              <FinancialAmount amount={summary?.unexplained_difference} size="sm" variant={unexplainedAmount > 0 ? "danger" : "positive"} />
             </div>
           </div>
 

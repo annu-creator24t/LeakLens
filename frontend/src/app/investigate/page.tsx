@@ -184,7 +184,7 @@ function InvestigateContent() {
               Financial Ledger Investigation
             </h1>
             <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400">
-              Session: <strong className="text-slate-200">{datasetId}</strong>
+              Dataset: <strong className="text-slate-200">{datasetId.length > 20 ? `LL-${datasetId.slice(-6).toUpperCase()}` : datasetId}</strong>
             </span>
           </div>
           <p className="text-slate-400 text-xs mt-1 flex items-center space-x-1.5">

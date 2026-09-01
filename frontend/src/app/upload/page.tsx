@@ -34,6 +34,7 @@ import {
   confirmAndImportDataset,
   UploadSessionState,
   FileUploadInfo,
+  ValidationIssue,
   ConfirmDatasetResponse
 } from "@/lib/api";
 import { FinancialAmount } from "@/components/ui/FinancialAmount";
@@ -90,6 +91,63 @@ const STEP_LABELS = [
   { step: 5, label: "Complete" },
 ];
 
+interface GroupedValidationIssue {
+  fileType: string;
+  fileName: string;
+  column: string;
+  code: string;
+  expected: string;
+  message: string;
+  rows: number[];
+  items: ValidationIssue[];
+}
+
+function groupValidationIssues(issues: ValidationIssue[], files: Record<string, FileUploadInfo> = {}): Record<string, GroupedValidationIssue[]> {
+  const byFile: Record<string, Record<string, GroupedValidationIssue>> = {};
+
+  for (const issue of issues) {
+    const ft = issue.file_type;
+    const fileName = issue.file_name || files[ft]?.original_filename || `${ft}.csv`;
+    if (!byFile[ft]) byFile[ft] = {};
+
+    const groupKey = `${issue.column}_${issue.code}`;
+    if (!byFile[ft][groupKey]) {
+      byFile[ft][groupKey] = {
+        fileType: ft,
+        fileName,
+        column: issue.column,
+        code: issue.code,
+        expected: issue.expected || "Valid formatted value",
+        message: issue.message,
+        rows: [],
+        items: [],
+      };
+    }
+    byFile[ft][groupKey].rows.push(issue.row_number);
+    byFile[ft][groupKey].items.push(issue);
+  }
+
+  const result: Record<string, GroupedValidationIssue[]> = {};
+  for (const ft of Object.keys(byFile)) {
+    result[ft] = Object.values(byFile[ft]);
+  }
+  return result;
+}
+
+function formatRowRange(rows: number[]): string {
+  if (!rows || rows.length === 0) return "";
+  const sorted = [...new Set(rows)].sort((a, b) => a - b);
+  if (sorted.length === 1) return `Row ${sorted[0]}`;
+  const isConsecutive = sorted.every((val, idx) => idx === 0 || val === sorted[idx - 1] + 1);
+  if (isConsecutive && sorted.length > 2) {
+    return `Rows ${sorted[0]}–${sorted[sorted.length - 1]}`;
+  }
+  if (sorted.length <= 6) {
+    return `Rows ${sorted.join(", ")}`;
+  }
+  return `Rows ${sorted.slice(0, 5).join(", ")} and ${sorted.length - 5} more`;
+}
+
 export default function UploadPage() {
   const router = useRouter();
 
@@ -109,9 +167,14 @@ export default function UploadPage() {
   const [datasetName, setDatasetName] = useState<string>("");
   const [finalResult, setFinalResult] = useState<ConfirmDatasetResponse | null>(null);
 
-  // Issues accordion states
+  // Issues accordion & group detail toggle states
   const [showBlockingErrors, setShowBlockingErrors] = useState<boolean>(true);
   const [showWarnings, setShowWarnings] = useState<boolean>(true);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Record<string, boolean>>({});
+
+  const toggleGroupExpanded = (key: string) => {
+    setExpandedGroupKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     initSession();
@@ -154,7 +217,7 @@ export default function UploadPage() {
           is_ready_to_confirm: false,
         };
       });
-      setSuccessBanner(`${fileType.toUpperCase()} file uploaded.`);
+      setSuccessBanner(`${fileType.charAt(0).toUpperCase() + fileType.slice(1)} file uploaded successfully.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to upload ${fileType} file.`);
     } finally {
@@ -207,6 +270,7 @@ export default function UploadPage() {
     }
     setValidating(true);
     setError(null);
+    setSuccessBanner(null);
     try {
       const valState = await validateUploadSession(activeUploadId);
       setSession(valState);
@@ -226,11 +290,11 @@ export default function UploadPage() {
     }
     setConfirming(true);
     setError(null);
+    setSuccessBanner(null);
     try {
       const res = await confirmAndImportDataset(activeUploadId, datasetName.trim() || undefined);
       setFinalResult(res);
       setStep(5);
-      setSuccessBanner("Dataset imported.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to import dataset.");
     } finally {
@@ -257,6 +321,10 @@ export default function UploadPage() {
   }
 
   const hasUploadedFiles = session && Object.keys(session.files).length > 0;
+  const errorIssues = (session?.issues || []).filter((i) => i.severity === "ERROR");
+  const warningIssues = (session?.issues || []).filter((i) => i.severity === "WARNING");
+  const groupedErrors = groupValidationIssues(errorIssues, session?.files || {});
+  const groupedWarnings = groupValidationIssues(warningIssues, session?.files || {});
 
   return (
     <AppShell>
@@ -279,16 +347,10 @@ export default function UploadPage() {
               </div>
               <span>Import Financial Data</span>
             </h1>
-            <p className="text-slate-400 text-xs mt-0.5">
-              Bring your payment, settlement, refund and fee exports.
+            <p className="text-slate-400 text-xs mt-1">
+              Upload CSV files for payments, settlements, refunds, and fees. Map the columns, validate your data, and confirm the import.
             </p>
           </div>
-
-          {uploadId && (
-            <span className="text-xs font-mono text-slate-400 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 self-start sm:self-auto">
-              Session: <strong className="text-slate-200">{uploadId}</strong>
-            </span>
-          )}
         </div>
 
         {/* 5-Step Progress Stepper */}
@@ -297,25 +359,25 @@ export default function UploadPage() {
             <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-slate-800 -z-0" />
 
             {STEP_LABELS.map(({ step: sNum, label }) => {
-              const isCompleted = step > sNum;
-              const isCurrent = step === sNum;
+              const isCompleted = step > sNum || (step === 5 && sNum === 5);
+              const isCurrent = step === sNum && step !== 5;
 
               return (
                 <div key={sNum} className="relative z-10 flex flex-col items-center space-y-1.5 bg-[#0c121e] px-2">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-all ${
                       isCompleted
-                        ? "bg-emerald-600 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                        ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
                         : isCurrent
-                        ? "bg-blue-600 text-white ring-4 ring-blue-900/40 shadow-[0_0_12px_rgba(37,99,235,0.4)]"
+                        ? "bg-blue-600 text-white ring-4 ring-blue-900/40 shadow-[0_0_12px_rgba(37,99,235,0.35)]"
                         : "bg-slate-900 text-slate-500 border border-slate-800"
                     }`}
                   >
-                    {isCompleted ? <Check className="w-4 h-4" /> : sNum}
+                    {isCompleted ? <Check className="w-4 h-4 text-emerald-400" /> : sNum}
                   </div>
                   <span
                     className={`text-[11px] font-medium font-mono ${
-                      isCurrent ? "text-blue-400 font-bold" : isCompleted ? "text-emerald-400" : "text-slate-500"
+                      isCurrent ? "text-blue-400 font-bold" : isCompleted ? "text-emerald-400 font-medium" : "text-slate-500"
                     }`}
                   >
                     {sNum} {label}
@@ -326,8 +388,8 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {/* Success Banner */}
-        {successBanner && (
+        {/* Success Banner (Step 1 Uploads only) */}
+        {step === 1 && successBanner && (
           <div className="p-3.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-xs text-emerald-300 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -443,16 +505,19 @@ export default function UploadPage() {
               })}
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-              <span className="text-xs text-slate-400 font-mono">
-                Upload at least your Payments & Settlements files to proceed.
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
+              <span className="text-xs text-slate-400">
+                Supported formats: UTF-8 CSV exports (up to 15 MB per file). Payments file is required; Settlements, Refunds, and Fees enable complete reconciliation.
               </span>
 
               <button
                 type="button"
                 disabled={!hasUploadedFiles}
-                onClick={() => setStep(2)}
-                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
+                onClick={() => {
+                  setSuccessBanner(null);
+                  setStep(2);
+                }}
+                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer shrink-0 self-end sm:self-auto"
               >
                 <span>Continue to Schema Mapping</span>
                 <ArrowRight className="w-4 h-4" />
@@ -512,7 +577,10 @@ export default function UploadPage() {
             <div className="flex items-center justify-between pt-4 border-t border-slate-800">
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => {
+                  setSuccessBanner(null);
+                  setStep(1);
+                }}
                 className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium cursor-pointer"
               >
                 Back to Upload
@@ -572,20 +640,26 @@ export default function UploadPage() {
               </div>
 
               {/* Blocking Errors */}
-              <div className="p-4 rounded-xl border border-rose-900/50 bg-[#140c14] space-y-1">
-                <div className="flex items-center space-x-2 text-rose-400 text-xs font-mono font-bold uppercase">
+              <div className={`p-4 rounded-xl border space-y-1 ${
+                totalErrors > 0 ? "border-rose-900/50 bg-[#140c14]" : "border-slate-800 bg-[#0c121e]"
+              }`}>
+                <div className={`flex items-center space-x-2 text-xs font-mono font-bold uppercase ${
+                  totalErrors > 0 ? "text-rose-400" : "text-slate-400"
+                }`}>
                   <XCircle className="w-4 h-4" />
                   <span>Blocking Errors</span>
                 </div>
                 <div className="text-2xl font-bold font-mono text-white pt-1">
-                  ❌ {formatNumber(totalErrors)}
+                  {totalErrors > 0 ? `❌ ${formatNumber(totalErrors)}` : "✓ 0"}
                 </div>
-                <p className="text-[11px] text-slate-400">Must be zero to import</p>
+                <p className="text-[11px] text-slate-400">
+                  {totalErrors > 0 ? "Must be zero to import" : "Clean — ready to import"}
+                </p>
               </div>
 
             </div>
 
-            {/* EXPANDABLE SECTION: VIEW BLOCKING ERRORS */}
+            {/* EXPANDABLE SECTION: GROUPED BLOCKING ERRORS */}
             {totalErrors > 0 && (
               <div className="rounded-xl border border-rose-900/60 bg-[#140c12] overflow-hidden transition-all shadow-sm">
                 <button
@@ -600,7 +674,7 @@ export default function UploadPage() {
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="text-sm font-bold font-mono text-rose-300 uppercase tracking-wide">
-                          View Blocking Errors
+                          Blocking Error Details
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-900/80 text-rose-200 border border-rose-700/60">
                           {formatNumber(totalErrors)} {totalErrors === 1 ? "Issue" : "Issues"}
@@ -617,65 +691,117 @@ export default function UploadPage() {
                 </button>
 
                 {showBlockingErrors && (
-                  <div className="overflow-x-auto p-4">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-rose-950/80 text-[11px] font-mono uppercase text-rose-400/90">
-                          <th className="py-2.5 px-3 font-semibold">File Type</th>
-                          <th className="py-2.5 px-3 font-semibold">CSV Row Number</th>
-                          <th className="py-2.5 px-3 font-semibold">Field</th>
-                          <th className="py-2.5 px-3 font-semibold">Invalid Value</th>
-                          <th className="py-2.5 px-3 font-semibold">Expected Rule</th>
-                          <th className="py-2.5 px-3 font-semibold">Exact Error Message</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-rose-950/40 font-mono">
-                        {(session?.issues || [])
-                          .filter((i) => i.severity === "ERROR")
-                          .map((issue) => {
-                            const fileName = issue.file_name || (session?.files[issue.file_type]?.original_filename) || `${issue.file_type}.csv`;
-                            return (
-                              <tr key={issue.issue_id} className="hover:bg-rose-950/20 transition-colors text-slate-300">
-                                <td className="py-2.5 px-3 font-semibold text-rose-300 whitespace-nowrap">
-                                  <div className="flex flex-col">
-                                    <span className="uppercase text-[10px] text-rose-400">{issue.file_type}</span>
-                                    <span className="text-slate-300 text-xs">{fileName}</span>
+                  <div className="p-4 space-y-4">
+                    {Object.entries(groupedErrors).map(([ft, groups]) => {
+                      const fileTotal = groups.reduce((acc, g) => acc + g.rows.length, 0);
+                      const displayFileName = groups[0]?.fileName || `${ft}.csv`;
+
+                      return (
+                        <div key={ft} className="rounded-lg border border-rose-950/70 bg-slate-950/60 overflow-hidden">
+                          {/* File header */}
+                          <div className="p-3 bg-rose-950/30 border-b border-rose-950/60 flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-mono font-bold text-rose-200">
+                                {displayFileName}
+                              </span>
+                              <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-rose-900/50 text-rose-300 border border-rose-800/40">
+                                {ft}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-mono text-rose-300/80 font-medium">
+                              {fileTotal} {fileTotal === 1 ? "blocking issue" : "blocking issues"}
+                            </span>
+                          </div>
+
+                          {/* Grouped rules under this file */}
+                          <div className="divide-y divide-rose-950/40">
+                            {groups.map((grp) => {
+                              const groupKey = `${ft}_${grp.column}_${grp.code}`;
+                              const isExpanded = Boolean(expandedGroupKeys[groupKey]);
+
+                              return (
+                                <div key={groupKey} className="p-3.5 space-y-2">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-xs font-semibold text-white">
+                                          {grp.message}
+                                        </span>
+                                        <span className="text-[10px] font-mono text-amber-300 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-900/40">
+                                          Field: {grp.column}
+                                        </span>
+                                        <span className="text-[10px] font-mono text-rose-300 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900/50">
+                                          {grp.rows.length} affected {grp.rows.length === 1 ? "record" : "records"}
+                                        </span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-300 font-mono flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        <span>
+                                          Expected: <strong className="text-emerald-400 font-normal bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/30">{grp.expected}</strong>
+                                        </span>
+                                        <span className="text-slate-400">
+                                          Affected rows: <strong className="text-slate-200 font-normal">{formatRowRange(grp.rows)}</strong>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleGroupExpanded(groupKey)}
+                                      className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 text-[11px] font-mono flex items-center space-x-1 cursor-pointer self-start sm:self-auto shrink-0 transition-colors"
+                                    >
+                                      <span>{isExpanded ? "Hide Records" : `View Records (${grp.rows.length})`}</span>
+                                      {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                    </button>
                                   </div>
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
-                                  Row {issue.row_number}
-                                </td>
-                                <td className="py-2.5 px-3 font-medium text-amber-300 whitespace-nowrap">
-                                  {issue.column}
-                                </td>
-                                <td className="py-2.5 px-3 whitespace-nowrap">
-                                  {issue.raw_value !== undefined && issue.raw_value !== "" ? (
-                                    <code className="text-rose-300 bg-rose-950/60 border border-rose-900/60 px-1.5 py-0.5 rounded text-[11px]">
-                                      {issue.raw_value}
-                                    </code>
-                                  ) : (
-                                    <span className="text-slate-500 italic text-[11px]">(empty)</span>
+
+                                  {/* Expandable individual rows sub-table */}
+                                  {isExpanded && (
+                                    <div className="pt-2 overflow-x-auto">
+                                      <table className="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                          <tr className="border-b border-rose-950/60 text-[10px] font-mono uppercase text-rose-400/80">
+                                            <th className="py-1.5 px-2.5 font-semibold">Row</th>
+                                            <th className="py-1.5 px-2.5 font-semibold">Invalid Value</th>
+                                            <th className="py-1.5 px-2.5 font-semibold">Diagnostic Detail</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-rose-950/30 font-mono text-[11px]">
+                                          {grp.items.map((item) => (
+                                            <tr key={item.issue_id} className="hover:bg-rose-950/20 text-slate-300">
+                                              <td className="py-1.5 px-2.5 text-slate-400 whitespace-nowrap">
+                                                Row {item.row_number}
+                                              </td>
+                                              <td className="py-1.5 px-2.5 whitespace-nowrap">
+                                                {item.raw_value !== undefined && item.raw_value !== "" ? (
+                                                  <code className="text-rose-300 bg-rose-950/80 border border-rose-900/60 px-1.5 py-0.5 rounded">
+                                                    {item.raw_value}
+                                                  </code>
+                                                ) : (
+                                                  <span className="text-slate-500 italic">(empty)</span>
+                                                )}
+                                              </td>
+                                              <td className="py-1.5 px-2.5 text-slate-300 font-sans text-xs">
+                                                {item.message}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   )}
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px]">
-                                  <span className="text-emerald-400/90 font-mono bg-emerald-950/30 border border-emerald-900/40 px-2 py-0.5 rounded inline-block">
-                                    {issue.expected || "Valid formatted field value"}
-                                  </span>
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-200 font-sans max-w-xs">
-                                  {issue.message}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* EXPANDABLE SECTION: VIEW WARNINGS */}
+            {/* EXPANDABLE SECTION: GROUPED WARNINGS */}
             {totalWarnings > 0 && (
               <div className="rounded-xl border border-amber-900/60 bg-[#14120c] overflow-hidden transition-all shadow-sm">
                 <button
@@ -690,7 +816,7 @@ export default function UploadPage() {
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="text-sm font-bold font-mono text-amber-300 uppercase tracking-wide">
-                          View Warnings
+                          Validation Warnings
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-900/80 text-amber-200 border border-amber-700/60">
                           {formatNumber(totalWarnings)} {totalWarnings === 1 ? "Notice" : "Notices"}
@@ -707,74 +833,74 @@ export default function UploadPage() {
                 </button>
 
                 {showWarnings && (
-                  <div className="overflow-x-auto p-4">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-amber-950/80 text-[11px] font-mono uppercase text-amber-400/90">
-                          <th className="py-2.5 px-3 font-semibold">File</th>
-                          <th className="py-2.5 px-3 font-semibold">Row</th>
-                          <th className="py-2.5 px-3 font-semibold">Field</th>
-                          <th className="py-2.5 px-3 font-semibold">Problem / Observation</th>
-                          <th className="py-2.5 px-3 font-semibold">Expected Format / Reference</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-amber-950/40 font-mono">
-                        {(session?.issues || [])
-                          .filter((i) => i.severity === "WARNING")
-                          .map((issue) => {
-                            const fileName = issue.file_name || (session?.files[issue.file_type]?.original_filename) || `${issue.file_type}.csv`;
-                            return (
-                              <tr key={issue.issue_id} className="hover:bg-amber-950/20 transition-colors text-slate-300">
-                                <td className="py-2.5 px-3 font-semibold text-amber-300 whitespace-nowrap">
-                                  {fileName}
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
-                                  Row {issue.row_number}
-                                </td>
-                                <td className="py-2.5 px-3 font-medium text-slate-200 whitespace-nowrap">
-                                  {issue.column}
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-200 max-w-xs font-sans">
-                                  {issue.message}
-                                  {issue.raw_value !== undefined && issue.raw_value !== "" && (
-                                    <span className="block text-[11px] font-mono text-slate-400 mt-0.5">
-                                      Flagged: <code className="text-amber-300 bg-amber-950/60 px-1 py-0.5 rounded">{issue.raw_value}</code>
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px] max-w-sm">
-                                  <span className="text-amber-400/90 font-mono bg-amber-950/30 border border-amber-900/40 px-2 py-0.5 rounded inline-block">
-                                    {issue.expected || "Valid format"}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
+                  <div className="p-4 space-y-3">
+                    {Object.entries(groupedWarnings).map(([ft, groups]) => (
+                      <div key={ft} className="rounded-lg border border-amber-950/70 bg-slate-950/60 p-3.5 space-y-2">
+                        <div className="flex items-center justify-between border-b border-amber-950/50 pb-2">
+                          <span className="text-xs font-mono font-bold text-amber-200">
+                            {groups[0]?.fileName || `${ft}.csv`}
+                          </span>
+                          <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40">
+                            {ft}
+                          </span>
+                        </div>
+                        {groups.map((grp) => (
+                          <div key={`${ft}_${grp.column}_${grp.code}`} className="text-xs space-y-1 text-slate-300">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-semibold text-slate-200">{grp.message}</span>
+                              <span className="text-[10px] font-mono text-slate-400">({formatRowRange(grp.rows)})</span>
+                            </div>
+                            <div className="text-[11px] text-amber-400/90 font-mono">
+                              Expected: {grp.expected}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             )}
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+            {/* Step 3 Action Bar with Explanatory Status & CTA */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-800">
               <button
                 type="button"
-                onClick={() => setStep(2)}
-                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium cursor-pointer"
+                onClick={() => {
+                  setSuccessBanner(null);
+                  setStep(2);
+                }}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium cursor-pointer self-start sm:self-auto"
               >
                 Back to Mapping
               </button>
 
-              <button
-                type="button"
-                disabled={totalErrors > 0}
-                onClick={() => setStep(4)}
-                className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
-              >
-                <span>Proceed to Confirmation</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 self-end sm:self-auto">
+                {totalErrors > 0 ? (
+                  <div className="flex items-center space-x-2 text-rose-400 text-xs font-medium bg-rose-950/40 border border-rose-900/50 px-3 py-1.5 rounded-lg">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{formatNumber(totalErrors)} blocking {totalErrors === 1 ? "error" : "errors"} must be resolved before confirmation.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2 text-emerald-400 text-xs font-medium bg-emerald-950/40 border border-emerald-900/50 px-3 py-1.5 rounded-lg">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>All records passed validation rules</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={totalErrors > 0}
+                  onClick={() => {
+                    setSuccessBanner(null);
+                    setStep(4);
+                  }}
+                  className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
+                >
+                  <span>Proceed to Confirmation</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
           </div>
@@ -803,12 +929,18 @@ export default function UploadPage() {
                 placeholder="e.g. August 2026 Merchant Settlement Export"
                 className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-xs text-slate-100 placeholder:text-slate-500 outline-none transition-colors"
               />
+              <p className="text-[11px] text-slate-500">
+                If left blank, LeakLens will generate a name based on the import date.
+              </p>
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-800">
               <button
                 type="button"
-                onClick={() => setStep(3)}
+                onClick={() => {
+                  setSuccessBanner(null);
+                  setStep(3);
+                }}
                 className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium cursor-pointer"
               >
                 Back to Validation
@@ -818,7 +950,7 @@ export default function UploadPage() {
                 type="button"
                 disabled={confirming}
                 onClick={handleConfirmImport}
-                className="px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center space-x-2 transition-colors cursor-pointer"
               >
                 {confirming ? (
                   <>
@@ -828,7 +960,7 @@ export default function UploadPage() {
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Import & Run Reconciliation</span>
+                    <span>Confirm & Run Reconciliation</span>
                   </>
                 )}
               </button>
@@ -839,7 +971,7 @@ export default function UploadPage() {
         {/* STEP 5: IMPORT COMPLETE */}
         {step === 5 && finalResult && (
           <div className="p-8 rounded-xl border border-emerald-900/60 bg-emerald-950/20 text-center space-y-6 max-w-lg mx-auto">
-            <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+            <div className="w-12 h-12 rounded-full bg-emerald-600/30 border border-emerald-500/50 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(16,185,129,0.25)]">
               <CheckCircle2 className="w-6 h-6" />
             </div>
 
@@ -848,18 +980,34 @@ export default function UploadPage() {
                 Dataset Successfully Imported
               </h2>
               <p className="text-xs text-slate-400">
-                {finalResult.dataset_name || finalResult.dataset_id} is now reconciled and ready for investigation.
+                Your financial records are ready for reconciliation.
               </p>
             </div>
 
-            <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 font-mono text-xs text-left space-y-1.5">
-              <div className="flex justify-between text-slate-400">
-                <span>Dataset ID:</span>
-                <span className="text-slate-200 font-semibold">{finalResult.dataset_id}</span>
+            <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-left space-y-2">
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Dataset Reference:</span>
+                <span className="text-slate-200 font-medium">{finalResult.dataset_name || "Financial Dataset"}</span>
               </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Exceptions Detected:</span>
-                <span className="text-rose-400 font-semibold">{formatNumber(finalResult.exceptions_detected)}</span>
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Reconciliation Status:</span>
+                <span className="text-emerald-400 font-medium flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Reconciled</span>
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Exceptions Status:</span>
+                {finalResult.exceptions_detected === 0 ? (
+                  <span className="text-emerald-400 font-medium flex items-center space-x-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>0 Exceptions (Clean)</span>
+                  </span>
+                ) : (
+                  <span className="text-amber-400 font-medium">
+                    {formatNumber(finalResult.exceptions_detected)} Exceptions Flagged
+                  </span>
+                )}
               </div>
             </div>
 
