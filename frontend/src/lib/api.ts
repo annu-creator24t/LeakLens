@@ -206,15 +206,32 @@ export async function fetchReconciliationExceptions(
 }
 
 export async function fetchExceptionDetail(datasetId: string, exceptionId: string): Promise<ExceptionItem> {
-  const res = await fetch(`${API_BASE_URL}/api/reconciliation/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}`, {
+  const url1 = `${API_BASE_URL}/api/reconciliation/${encodeURIComponent(datasetId)}/exceptions/${encodeURIComponent(exceptionId)}`;
+  try {
+    const res = await fetch(url1, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Retry fallback
+  }
+
+  // Fallback endpoint
+  const url2 = `${API_BASE_URL}/api/exceptions/${encodeURIComponent(datasetId)}/${encodeURIComponent(exceptionId)}`;
+  const res2 = await fetch(url2, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
   });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch exception detail: ${res.status}`);
+  if (!res2.ok) {
+    const errorData = await res2.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to fetch exception detail: ${res2.status}`);
   }
-  return await res.json();
+  return await res2.json();
 }
 
 export interface MetricItem {

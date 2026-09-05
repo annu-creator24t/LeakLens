@@ -70,11 +70,11 @@ class MockAIService(BaseAIService):
         pay = evidence.get("payment") or {}
         details = evidence.get("details", {})
         
-        pid = pay.get("payment_id") or details.get("unknown_payment_id") or "UNKNOWN_PAYMENT"
-        amt = pay.get("amount") or details.get("orphan_amount") or "0.00"
-        expected = calc.get("expected_settlement") or "0.00"
-        actual = calc.get("actual_settlement") or "0.00"
-        diff = calc.get("difference") or details.get("excess_amount") or details.get("fee_difference") or "0.00"
+        pid = pay.get("payment_id") or evidence.get("payment_id") or details.get("unknown_payment_id") or "UNKNOWN_PAYMENT"
+        amt = pay.get("amount") or evidence.get("payment_amount") or details.get("orphan_amount") or "0.00"
+        expected = calc.get("expected_settlement") or evidence.get("expected_settlement") or "0.00"
+        actual = calc.get("actual_settlement") or evidence.get("actual_settlement") or evidence.get("settlement_amount") or "0.00"
+        diff = calc.get("difference") or calc.get("financial_impact") or evidence.get("amount_discrepancy") or evidence.get("discrepancy") or details.get("excess_amount") or details.get("fee_difference") or "0.00"
         settlements = evidence.get("settlements", [])
         refunds = evidence.get("refunds", [])
         fees = evidence.get("fees") or {}

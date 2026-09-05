@@ -26,6 +26,7 @@ import {
 import AppShell from "@/components/layout/AppShell";
 import {
   fetchExceptionDetail,
+  fetchAvailableDatasets,
   triggerAIInvestigation,
   fetchStoredAIInvestigation,
   startInvestigation,
@@ -60,10 +61,21 @@ const EXCEPTION_TITLES: Record<string, string> = {
   ORPHAN_SETTLEMENT: "Orphan Settlement",
 };
 
+function parseDatasetIdFromException(exceptionId: string): string {
+  if (exceptionId && exceptionId.startsWith("EXC_")) {
+    const parts = exceptionId.split("_");
+    if (parts.length >= 3) {
+      return parts.slice(1, -1).join("_");
+    }
+  }
+  return "";
+}
+
 function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   const searchParams = useSearchParams();
-  const datasetId = searchParams.get("dataset_id") || "";
+  const queryDatasetId = searchParams.get("dataset_id") || "";
 
+  const [activeDatasetId, setActiveDatasetId] = useState<string>(() => queryDatasetId || parseDatasetIdFromException(exceptionId));
   const [exception, setException] = useState<ExceptionItem | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,18 +97,39 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   const [modalType, setModalType] = useState<"RESOLVE" | "IGNORE" | null>(null);
 
   useEffect(() => {
-    if (datasetId && exceptionId) {
-      loadDetail();
-      checkStoredAI();
-      loadHistory();
+    async function resolveDataset() {
+      let ds = queryDatasetId || parseDatasetIdFromException(exceptionId);
+      if (!ds) {
+        try {
+          const avail = await fetchAvailableDatasets();
+          if (avail.datasets && avail.datasets.length > 0) {
+            ds = avail.datasets[0].dataset_id;
+          }
+        } catch {
+          // Ignored
+        }
+      }
+      if (ds && ds !== activeDatasetId) {
+        setActiveDatasetId(ds);
+      }
     }
-  }, [datasetId, exceptionId]);
+    resolveDataset();
+  }, [queryDatasetId, exceptionId]);
 
-  const loadDetail = async () => {
+  useEffect(() => {
+    if (activeDatasetId && exceptionId) {
+      loadDetail(activeDatasetId);
+      checkStoredAI(activeDatasetId);
+      loadHistory(activeDatasetId);
+    }
+  }, [activeDatasetId, exceptionId]);
+
+  const loadDetail = async (dsId: string = activeDatasetId) => {
+    if (!dsId) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchExceptionDetail(datasetId, exceptionId);
+      const data = await fetchExceptionDetail(dsId, exceptionId);
       setException(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong while loading this exception.");
@@ -105,18 +138,20 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
     }
   };
 
-  const checkStoredAI = async () => {
+  const checkStoredAI = async (dsId: string = activeDatasetId) => {
+    if (!dsId) return;
     try {
-      const stored = await fetchStoredAIInvestigation(datasetId, exceptionId);
+      const stored = await fetchStoredAIInvestigation(dsId, exceptionId);
       if (stored) setAiData(stored);
     } catch {
       // Ignored
     }
   };
 
-  const loadHistory = async () => {
+  const loadHistory = async (dsId: string = activeDatasetId) => {
+    if (!dsId) return;
     try {
-      const hist = await fetchInvestigationHistory(datasetId, exceptionId);
+      const hist = await fetchInvestigationHistory(dsId, exceptionId);
       setNotes(hist.notes || []);
       setAuditEvents(hist.audit_events || []);
       if (exception && hist.current_status) {
@@ -128,11 +163,11 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   };
 
   const handleRunAIInvestigation = async (force: boolean = false) => {
-    if (aiLoading) return;
+    if (aiLoading || !activeDatasetId) return;
     setAiLoading(true);
     setAiError(null);
     try {
-      const res = await triggerAIInvestigation(datasetId, exceptionId, force);
+      const res = await triggerAIInvestigation(activeDatasetId, exceptionId, force);
       setAiData(res);
       setSuccessBanner("AI Investigation generated successfully.");
     } catch (err) {
@@ -143,12 +178,13 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   };
 
   const handleStartInvestigation = async () => {
+    if (!activeDatasetId) return;
     setActionLoading(true);
     try {
-      await startInvestigation(datasetId, exceptionId);
+      await startInvestigation(activeDatasetId, exceptionId);
       setException((prev) => (prev ? { ...prev, status: "INVESTIGATING" } : null));
       setSuccessBanner("Investigation started.");
-      await loadHistory();
+      await loadHistory(activeDatasetId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start investigation.");
     } finally {
@@ -157,13 +193,13 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   };
 
   const handleSaveNote = async () => {
-    if (!noteInput.trim() || savingNote) return;
+    if (!noteInput.trim() || savingNote || !activeDatasetId) return;
     setSavingNote(true);
     try {
-      await addInvestigationNote(datasetId, exceptionId, noteInput.trim());
+      await addInvestigationNote(activeDatasetId, exceptionId, noteInput.trim());
       setNoteInput("");
       setSuccessBanner("Investigation note recorded.");
-      await loadHistory();
+      await loadHistory(activeDatasetId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save note.");
     } finally {
@@ -172,20 +208,20 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   };
 
   const handleConfirmModalAction = async (note: string) => {
-    if (!modalType || !note.trim()) return;
+    if (!modalType || !note.trim() || !activeDatasetId) return;
     setActionLoading(true);
     try {
       if (modalType === "RESOLVE") {
-        await resolveException(datasetId, exceptionId, note);
+        await resolveException(activeDatasetId, exceptionId, note);
         setException((prev) => (prev ? { ...prev, status: "RESOLVED" } : null));
         setSuccessBanner("Investigation resolved successfully.");
       } else if (modalType === "IGNORE") {
-        await ignoreException(datasetId, exceptionId, note);
+        await ignoreException(activeDatasetId, exceptionId, note);
         setException((prev) => (prev ? { ...prev, status: "IGNORED" } : null));
         setSuccessBanner("Exception marked as bypassed/ignored.");
       }
       setModalType(null);
-      await loadHistory();
+      await loadHistory(activeDatasetId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Status update failed.");
     } finally {
@@ -194,18 +230,30 @@ function ExceptionDetailContent({ exceptionId }: { exceptionId: string }) {
   };
 
   const handleReopen = async () => {
+    if (!activeDatasetId) return;
     setActionLoading(true);
     try {
-      await reopenException(datasetId, exceptionId);
+      await reopenException(activeDatasetId, exceptionId);
       setException((prev) => (prev ? { ...prev, status: "OPEN" } : null));
       setSuccessBanner("Exception reopened for investigation.");
-      await loadHistory();
+      await loadHistory(activeDatasetId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reopen exception.");
     } finally {
       setActionLoading(false);
     }
   };
+
+  const datasetId = activeDatasetId || queryDatasetId;
+
+  if (!datasetId && loading) {
+    return (
+      <div className="space-y-6 animate-pulse p-6">
+        <div className="h-6 w-48 rounded bg-slate-800/80" />
+        <div className="h-32 rounded-2xl bg-slate-900/60" />
+      </div>
+    );
+  }
 
   if (!datasetId) {
     return (

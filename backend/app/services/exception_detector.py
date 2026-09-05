@@ -133,6 +133,44 @@ class ExceptionDetectionService:
             primary_type = primary_signal["type"]
             secondary = [s["type"] for s in signals if s["type"] != primary_type]
 
+            # Build chronological timeline
+            timeline = [
+                {
+                    "step": 1,
+                    "event": "Payment Created",
+                    "timestamp": payment.get("created_at"),
+                    "details": f"Amount: ₹{amount:,.2f} ({payment.get('payment_method', 'N/A')})"
+                },
+                {
+                    "step": 2,
+                    "event": f"Payment {payment.get('payment_status', 'SUCCESS')}",
+                    "timestamp": payment.get("created_at"),
+                    "details": f"Order ID: {payment.get('order_id', 'N/A')}"
+                }
+            ]
+            if p_settlements:
+                for s_item in p_settlements:
+                    timeline.append({
+                        "step": len(timeline) + 1,
+                        "event": "Settlement Payout Record",
+                        "timestamp": s_item.get("settlement_date"),
+                        "details": f"Settlement ID: {s_item.get('settlement_id')}, Amount: ₹{to_decimal(s_item.get('settlement_amount', '0')):,.2f}"
+                    })
+            if p_refunds:
+                for r_item in p_refunds:
+                    timeline.append({
+                        "step": len(timeline) + 1,
+                        "event": "Refund Processed",
+                        "timestamp": r_item.get("refund_date"),
+                        "details": f"Refund ID: {r_item.get('refund_id')}, Amount: ₹{to_decimal(r_item.get('refund_amount', '0')):,.2f}"
+                    })
+            timeline.append({
+                "step": len(timeline) + 1,
+                "event": f"Discrepancy Flagged: {primary_type}",
+                "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "details": primary_signal["description"]
+            })
+
             # Build machine-readable evidence
             evidence = {
                 "payment": {
@@ -144,19 +182,30 @@ class ExceptionDetectionService:
                     "status": payment.get("payment_status"),
                     "created_at": payment.get("created_at"),
                 },
+                "payment_amount": float(amount),
                 "refunds": [
                     {"refund_id": r.get("refund_id"), "amount": str(r.get("refund_amount")), "date": r.get("refund_date")}
                     for r in p_refunds
                 ],
+                "refund_amount": float(total_refund),
                 "fees": {
                     "fee_amount": str(fee_amount),
                     "tax_amount": str(tax_amount),
                 },
+                "fee_deduction": float(fee_amount + tax_amount),
                 "settlements": [
                     {"settlement_id": s.get("settlement_id"), "amount": str(s.get("settlement_amount")), "date": s.get("settlement_date")}
                     for s in p_settlements
                 ],
+                "settlement_amount": float(actual_settlement),
+                "settlement_found": len(p_settlements) > 0,
+                "expected_settlement": float(expected_settlement),
+                "actual_settlement": float(actual_settlement),
+                "amount_discrepancy": float(primary_signal["financial_impact"]),
                 "calculation": {
+                    "payment_amount": str(amount),
+                    "refund_deduction": str(total_refund),
+                    "fee_deduction": str(fee_amount + tax_amount),
                     "expected_settlement": str(expected_settlement),
                     "actual_settlement": str(actual_settlement),
                     "difference": str(primary_signal["difference"]),
@@ -178,13 +227,18 @@ class ExceptionDetectionService:
                 "exception_type": primary_type,
                 "severity": primary_signal["severity"],
                 "status": "OPEN",
+                "amount_discrepancy": float(primary_signal["financial_impact"]),
+                "expected_settlement": float(expected_settlement),
+                "actual_settlement": float(actual_settlement),
                 "financial_impact": float(primary_signal["financial_impact"]),
                 "difference": float(primary_signal["difference"]),
                 "confidence": 1.0,
+                "created_at": payment.get("created_at") or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "detected_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "secondary_signals": secondary,
                 "description": primary_signal["description"],
                 "evidence": evidence,
+                "timeline": timeline,
             }
             detected.append(exc_doc)
             counter += 1
@@ -203,18 +257,41 @@ class ExceptionDetectionService:
             if pid not in payment_map:
                 for s in s_list:
                     sig_orphan = check_orphan_settlement(s)
+                    orphan_amt = to_decimal(s.get("settlement_amount", "0"))
+                    timeline = [
+                        {
+                            "step": 1,
+                            "event": "Settlement Payout Record Ingested",
+                            "timestamp": s.get("settlement_date"),
+                            "details": f"Settlement ID: {s.get('settlement_id')}, Amount: ₹{orphan_amt:,.2f}"
+                        },
+                        {
+                            "step": 2,
+                            "event": "Discrepancy Flagged: ORPHAN_SETTLEMENT",
+                            "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "details": sig_orphan["description"]
+                        }
+                    ]
                     evidence = {
                         "payment": None,
+                        "payment_amount": 0.0,
                         "refunds": [],
+                        "refund_amount": 0.0,
                         "fees": None,
+                        "fee_deduction": 0.0,
                         "settlements": [
                             {"settlement_id": s.get("settlement_id"), "amount": str(s.get("settlement_amount")), "date": s.get("settlement_date")}
                         ],
+                        "settlement_amount": float(orphan_amt),
+                        "settlement_found": True,
+                        "expected_settlement": 0.0,
+                        "actual_settlement": float(orphan_amt),
+                        "amount_discrepancy": float(orphan_amt),
                         "calculation": {
                             "expected_settlement": "0.00",
-                            "actual_settlement": str(s["settlement_amount"]),
-                            "difference": str(s["settlement_amount"]),
-                            "financial_impact": str(s["settlement_amount"]),
+                            "actual_settlement": str(orphan_amt),
+                            "difference": str(orphan_amt),
+                            "financial_impact": str(orphan_amt),
                         },
                         "rule": {
                             "name": "ORPHAN_SETTLEMENT",
@@ -233,13 +310,18 @@ class ExceptionDetectionService:
                         "exception_type": "ORPHAN_SETTLEMENT",
                         "severity": "CRITICAL",
                         "status": "OPEN",
+                        "amount_discrepancy": float(sig_orphan["financial_impact"]),
+                        "expected_settlement": 0.0,
+                        "actual_settlement": float(orphan_amt),
                         "financial_impact": float(sig_orphan["financial_impact"]),
                         "difference": float(sig_orphan["difference"]),
                         "confidence": 1.0,
+                        "created_at": s.get("settlement_date") or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "detected_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "secondary_signals": [],
                         "description": sig_orphan["description"],
                         "evidence": evidence,
+                        "timeline": timeline,
                     }
                     detected.append(exc_doc)
                     counter += 1
@@ -383,6 +465,13 @@ class ExceptionDetectionService:
         for e in exceptions:
             if e.get("exception_id") == exception_id:
                 return e
+
+        from app.services.reconciliation_engine import reconciliation_engine
+        if dataset_id in reconciliation_engine._reconciled_exceptions:
+            for e in reconciliation_engine._reconciled_exceptions[dataset_id]:
+                if e.get("exception_id") == exception_id:
+                    return e
+
         return None
 
 

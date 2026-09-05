@@ -39,6 +39,9 @@ class AIInvestigatorService:
         # 1. Fetch Exception & Structured Evidence
         exc = await exception_detector.get_exception_detail(dataset_id, exception_id)
         if not exc:
+            from app.services.reconciliation_engine import reconciliation_engine
+            exc = await reconciliation_engine.get_exception_detail(dataset_id, exception_id)
+        if not exc:
             raise ValueError(f"Exception '{exception_id}' not found in dataset '{dataset_id}'.")
 
         evidence = exc.get("evidence", {})

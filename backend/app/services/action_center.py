@@ -250,6 +250,9 @@ class ActionCenterService:
         """Adds an investigation note without modifying status."""
         exc = await exception_detector.get_exception_detail(dataset_id, exception_id)
         if not exc:
+            from app.services.reconciliation_engine import reconciliation_engine
+            exc = await reconciliation_engine.get_exception_detail(dataset_id, exception_id)
+        if not exc:
             raise ValueError(f"Exception '{exception_id}' not found in dataset '{dataset_id}'.")
 
         now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -284,6 +287,9 @@ class ActionCenterService:
     async def get_history(self, dataset_id: str, exception_id: str) -> InvestigationHistoryResponse:
         """Retrieves chronological notes and audit history for the exception."""
         exc = await exception_detector.get_exception_detail(dataset_id, exception_id)
+        if not exc:
+            from app.services.reconciliation_engine import reconciliation_engine
+            exc = await reconciliation_engine.get_exception_detail(dataset_id, exception_id)
         if not exc:
             raise ValueError(f"Exception '{exception_id}' not found in dataset '{dataset_id}'.")
 

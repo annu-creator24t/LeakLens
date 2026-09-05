@@ -19,15 +19,21 @@ class DetectedException(BaseModel):
     payment_id: Optional[str] = None
     order_id: Optional[str] = None
     primary_exception_type: str
+    exception_type: Optional[str] = None
     severity: str
     status: str = "OPEN"
-    financial_impact: float
-    difference: float
+    financial_impact: float = 0.0
+    difference: float = 0.0
+    amount_discrepancy: Optional[float] = None
+    expected_settlement: Optional[float] = None
+    actual_settlement: Optional[float] = None
     confidence: float = 1.0  # Deterministic rule confidence = 100%
-    detected_at: str
+    detected_at: str = ""
+    created_at: Optional[str] = None
     secondary_signals: List[str] = Field(default_factory=list)
-    description: str
-    evidence: Dict[str, Any]
+    description: str = ""
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ExceptionSummary(BaseModel):

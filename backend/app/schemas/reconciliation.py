@@ -43,13 +43,17 @@ class ExceptionDetailResponse(BaseModel):
     exception_id: str
     dataset_id: str
     payment_id: Optional[str] = None
-    exception_type: ExceptionType
-    severity: SeverityLevel
-    amount_discrepancy: float
-    expected_settlement: float
-    actual_settlement: float
-    status: str
-    description: str
-    evidence: Dict[str, Any]
-    timeline: List[Dict[str, Any]]
-    created_at: str
+    order_id: Optional[str] = None
+    exception_type: Any
+    severity: Any
+    amount_discrepancy: float = 0.0
+    expected_settlement: float = 0.0
+    actual_settlement: float = 0.0
+    financial_impact: Optional[float] = None
+    difference: Optional[float] = None
+    status: str = "OPEN"
+    description: str = ""
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: str = ""
+    detected_at: Optional[str] = None

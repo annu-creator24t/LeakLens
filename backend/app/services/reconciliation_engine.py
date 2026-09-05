@@ -104,20 +104,30 @@ class ReconciliationEngine:
                 # Check if an invalid settlement was credited for a failed payment
                 if pid in settlements_by_pid:
                     actual_settled = sum((s["settlement_amount"] for s in settlements_by_pid[pid]), Decimal("0.00"))
-                    exc = self._build_exception(
-                        exc_id=f"EXC_{dataset_id}_{exc_counter:05d}",
-                        dataset_id=dataset_id,
-                        payment=payment,
-                        exc_type=ExceptionType.AMOUNT_MISMATCH,
-                        severity=SeverityLevel.CRITICAL,
-                        expected=Decimal("0.00"),
-                        actual=actual_settled,
-                        description=f"Settlement credited for non-successful payment (Status: {status}).",
-                        evidence={"reason": "FAILED_PAYMENT_SETTLED", "status": status}
-                    )
-                    exceptions.append(exc)
-                    exc_counter += 1
-                    total_actual_settlement += actual_settled
+                    if actual_settled > Decimal("0.00"):
+                        exc = self._build_exception(
+                            exc_id=f"EXC_{dataset_id}_{exc_counter:05d}",
+                            dataset_id=dataset_id,
+                            payment=payment,
+                            exc_type=ExceptionType.AMOUNT_MISMATCH,
+                            severity=SeverityLevel.CRITICAL,
+                            expected=Decimal("0.00"),
+                            actual=actual_settled,
+                            description=f"Settlement of ₹{actual_settled:,.2f} credited for non-successful payment (Status: {status}).",
+                            evidence={
+                                "reason": "FAILED_PAYMENT_SETTLED",
+                                "status": status,
+                                "payment_amount": float(payment["amount"]),
+                                "expected_settlement": 0.0,
+                                "actual_settlement": float(actual_settled),
+                                "settlement_amount": float(actual_settled),
+                                "amount_discrepancy": float(actual_settled),
+                                "settlement_found": True,
+                            }
+                        )
+                        exceptions.append(exc)
+                        exc_counter += 1
+                        total_actual_settlement += actual_settled
                 continue
 
             total_volume += amount
@@ -438,16 +448,22 @@ class ReconciliationEngine:
             "exception_id": exc_id,
             "dataset_id": dataset_id,
             "payment_id": pid,
+            "order_id": payment.get("order_id") if payment else None,
+            "primary_exception_type": exc_type.value if hasattr(exc_type, "value") else str(exc_type),
             "exception_type": exc_type,
             "severity": severity,
             "amount_discrepancy": float(discrepancy),
+            "financial_impact": float(discrepancy),
+            "difference": float(discrepancy),
             "expected_settlement": float(expected),
             "actual_settlement": float(actual),
+            "confidence": 1.0,
             "status": "OPEN",
             "description": description,
             "evidence": evidence,
             "timeline": timeline,
-            "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            "created_at": (payment.get("created_at") if payment else None) or (settlement.get("settlement_date") if settlement else None) or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "detected_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         }
 
     async def _fetch_all_records(self, dataset_id: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -571,6 +587,13 @@ class ReconciliationEngine:
         for e in exceptions:
             if e.get("exception_id") == exception_id:
                 return e
+
+        from app.services.exception_detector import exception_detector
+        if dataset_id in exception_detector._exceptions_cache:
+            for e in exception_detector._exceptions_cache[dataset_id]:
+                if e.get("exception_id") == exception_id:
+                    return e
+
         return None
 
 

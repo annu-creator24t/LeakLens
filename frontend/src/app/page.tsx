@@ -157,6 +157,14 @@ export default function LandingPage() {
             </button>
 
             <Link
+              href="/intro"
+              className="text-xs text-blue-300 hover:text-white transition-colors border border-blue-800/60 px-3 py-1.5 rounded-lg bg-blue-950/40 flex items-center space-x-1.5"
+            >
+              <Play className="w-3 h-3 text-blue-400 fill-blue-400" />
+              <span>30s Intro</span>
+            </Link>
+
+            <Link
               href="/upload"
               className="text-xs text-slate-300 hover:text-white transition-colors border border-slate-800 px-3 py-1.5 rounded-lg bg-slate-900"
             >
@@ -234,10 +242,18 @@ export default function LandingPage() {
 
               <Link
                 href="/upload"
-                className="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-200 border border-slate-700/80 font-medium text-sm transition-all flex items-center space-x-2 cursor-pointer shadow-sm hover:border-slate-600"
+                className="px-5 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-200 border border-slate-700/80 font-medium text-sm transition-all flex items-center space-x-2 cursor-pointer shadow-sm hover:border-slate-600"
               >
                 <FileSpreadsheet className="w-4 h-4 text-slate-400" />
-                <span>Upload Financial Data</span>
+                <span>Upload CSVs</span>
+              </Link>
+
+              <Link
+                href="/intro"
+                className="px-4 py-3.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-800/50 font-medium text-sm transition-all flex items-center space-x-2 cursor-pointer shadow-sm"
+              >
+                <Play className="w-3.5 h-3.5 fill-blue-400 text-blue-400" />
+                <span>30s Product Intro</span>
               </Link>
             </div>
 
